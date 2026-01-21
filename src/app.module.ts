@@ -1,9 +1,54 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ConversationParticipantsModule } from './modules/conversation-participants/conversation-participants.module';
+import { GroupsModule } from './modules/groups/groups.module';
+import { GroupMembersModule } from './modules/group-members/group-members.module';
+import { LikesModule } from './modules/likes/likes.module';
+import { MessagesModule } from './modules/messages/messages.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { FriendsModule } from './modules/friends/friends.module';
+import { ConversationsModule } from './modules/conversations/conversations.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { CommentsModule } from './modules/comments/comments.module';
+import { PostsModule } from './modules/posts/posts.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
-  imports: [],
+  imports: [
+    // Load .env file
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    // Connect to MongoDB
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGODB_URL'),
+      }),
+      inject: [ConfigService],
+    }),
+    
+    AdminModule,
+    AnalyticsModule,
+    UsersModule,
+    PostsModule,
+    // AuthModule,
+    CommentsModule,
+    NotificationsModule,
+    ConversationsModule,
+    ConversationParticipantsModule,
+    FriendsModule,
+    GroupsModule,
+    GroupMembersModule,
+    LikesModule,
+    MessagesModule,
+    
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
