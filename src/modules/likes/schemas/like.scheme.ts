@@ -4,7 +4,7 @@ import { HydratedDocument } from 'mongoose';
 
 export type LikeDocument = HydratedDocument<Like>;
 
-@Schema()
+@Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Like {
     @Prop()
     user_id: string;
@@ -15,7 +15,6 @@ export class Like {
     @Prop()
     comment_id: string;
 
-    @Prop()
     created_at: Date;
 }
 

@@ -4,7 +4,7 @@ import { HydratedDocument } from 'mongoose';
 
 export type ReportDocument = HydratedDocument<Report>;
 
-@Schema()
+@Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Report {
     @Prop()
     reporter_id: string;
@@ -42,7 +42,6 @@ export class Report {
     @Prop()
     resolved_note: string;
 
-    @Prop()
     created_at: Date;
 }
 

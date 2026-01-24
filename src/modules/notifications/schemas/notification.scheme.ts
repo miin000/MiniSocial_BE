@@ -4,7 +4,7 @@ import { HydratedDocument } from 'mongoose';
 
 export type NotificationDocument = HydratedDocument<Notification>;
 
-@Schema()
+@Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Notification {
     @Prop()
     user_id: string;
@@ -27,7 +27,6 @@ export class Notification {
     @Prop()
     is_read: boolean;
 
-    @Prop()
     created_at: Date;
 }
 

@@ -4,7 +4,7 @@ import { HydratedDocument } from 'mongoose';
 
 export type FriendDocument = HydratedDocument<Friend>;
 
-@Schema()
+@Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Friend {
     @Prop()
     user_id_1: string;
@@ -18,10 +18,7 @@ export class Friend {
     @Prop()
     action_user_id: string;
 
-    @Prop()
     created_at: Date;
-
-    @Prop()
     updated_at: Date;
 }
 

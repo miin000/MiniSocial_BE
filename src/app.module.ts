@@ -16,6 +16,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { CommentsModule } from './modules/comments/comments.module';
 import { PostsModule } from './modules/posts/posts.module';
 import { UsersModule } from './modules/users/users.module';
+import { AuthModule } from 'modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -37,7 +38,7 @@ import { UsersModule } from './modules/users/users.module';
     AnalyticsModule,
     UsersModule,
     PostsModule,
-    // AuthModule,
+    AuthModule,
     CommentsModule,
     NotificationsModule,
     ConversationsModule,

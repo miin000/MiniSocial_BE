@@ -19,6 +19,9 @@ export class ConversationParticipant {
     joined_at: Date;
 
     @Prop()
+    left_at: Date;
+
+    @Prop()
     last_read_at: Date;
 }
 

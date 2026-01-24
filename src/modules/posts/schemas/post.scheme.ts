@@ -4,7 +4,7 @@ import { HydratedDocument } from 'mongoose';
 
 export type PostDocument = HydratedDocument<Post>;
 
-@Schema()
+@Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Post {
     @Prop()
     user_id: string;
@@ -36,10 +36,7 @@ export class Post {
     @Prop()
     shares_count: number;
 
-    @Prop()
     created_at: Date;
-
-    @Prop()
     updated_at: Date;
 }
 

@@ -4,15 +4,33 @@ import { HydratedDocument } from 'mongoose';
 
 export type UserDocument = HydratedDocument<User>;
 
-@Schema()
+export enum UserRoleGroup {
+  MEMBER = 'MEMBER',
+  MODERATOR = 'MODERATOR',
+  ADMIN = 'ADMIN',
+}
+
+export enum UserRoleAdmin {
+  ADMIN = 'ADMIN',
+  MODERATOR = 'MODERATOR',
+  VIEWER = 'VIEWER',
+}
+
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  BLOCKED = 'BLOCKED',
+}
+
+
+@Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class User {
-  @Prop()
+  @Prop({ required: true, unique: true })
   username: string;
 
-  @Prop()
+  @Prop({ required: true, unique: true })
   email: string;
 
-  @Prop()
+  @Prop({ required: true, select: false })
   password: string;
 
   @Prop()
@@ -33,17 +51,20 @@ export class User {
   @Prop()
   birthdate: Date;
 
-  @Prop()
-  status: string;
+  @Prop({ type: [String], enum: UserRoleGroup, default: [UserRoleGroup.MEMBER] })
+  roles_group: UserRoleGroup[];
 
-  @Prop()
-  created_at: Date;
-
-  @Prop()
-  updated_at: Date;
+  @Prop({ type: [String], enum: UserRoleAdmin, default: [UserRoleAdmin.VIEWER] })
+  roles_admin: UserRoleAdmin[];
+  
+  @Prop({ type: String, enum: UserStatus, default: UserStatus.ACTIVE })
+  status: UserStatus;
 
   @Prop()
   last_login: Date;
+
+  created_at: Date;
+  updated_at: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

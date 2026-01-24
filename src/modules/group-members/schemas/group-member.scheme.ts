@@ -25,7 +25,10 @@ export class GroupMember {
     approved_at: Date;
 
     @Prop()
-    joinedAt: Date;
+    joined_at: Date;
+
+    @Prop()
+    left_at: Date;
 
     @Prop()
     invited_by: string;

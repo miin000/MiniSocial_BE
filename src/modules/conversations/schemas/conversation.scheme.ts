@@ -4,7 +4,7 @@ import { HydratedDocument } from 'mongoose';
 
 export type ConversationDocument = HydratedDocument<Conversation>;
 
-@Schema()
+@Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Conversation {
     @Prop()
     type: string;
@@ -21,10 +21,7 @@ export class Conversation {
     @Prop()
     last_message_id: string;
 
-    @Prop()
     created_at: Date;
-
-    @Prop()
     updated_at: Date;
 }
 

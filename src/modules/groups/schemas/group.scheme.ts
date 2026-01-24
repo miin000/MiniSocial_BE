@@ -1,11 +1,10 @@
 
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import { Like } from 'src/modules/likes/schemas/like.scheme';
 
 export type GroupDocument = HydratedDocument<Group>;
 
-@Schema()
+@Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Group {
     @Prop()
     creator_id: string;
@@ -34,10 +33,7 @@ export class Group {
     @Prop()
     require_post_approval: boolean;
 
-    @Prop()
     created_at: Date;
-
-    @Prop()
     updated_at: Date;
 }
 
