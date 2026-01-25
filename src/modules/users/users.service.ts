@@ -34,6 +34,51 @@ export class UsersService {
         return this.userModel.findOne({ username }).select('+password').exec();
     }
 
+    // Admin methods
+    async findAll(): Promise<UserDocument[]> {
+        return this.userModel.find().select('-password').exec();
+    }
+
+    async updateUser(id: string, updateData: Partial<CreateUserDto>): Promise<UserDocument> {
+        const updatedUser = await this.userModel.findByIdAndUpdate(id, updateData, { new: true }).select('-password').exec();
+        if (!updatedUser) {
+            throw new Error('User not found');
+        }
+        return updatedUser;
+    }
+
+    async deleteUser(id: string): Promise<void> {
+        const result = await this.userModel.findByIdAndDelete(id).exec();
+        if (!result) {
+            throw new Error('User not found');
+        }
+    }
+
+    // Block/Unblock user methods
+    async blockUser(id: string): Promise<UserDocument> {
+        const updatedUser = await this.userModel.findByIdAndUpdate(
+            id,
+            { status: 'BLOCKED' },
+            { new: true }
+        ).select('-password').exec();
+        if (!updatedUser) {
+            throw new Error('User not found');
+        }
+        return updatedUser;
+    }
+
+    async unblockUser(id: string): Promise<UserDocument> {
+        const updatedUser = await this.userModel.findByIdAndUpdate(
+            id,
+            { status: 'ACTIVE' },
+            { new: true }
+        ).select('-password').exec();
+        if (!updatedUser) {
+            throw new Error('User not found');
+        }
+        return updatedUser;
+    }
+
     // async getProfile(userId: string): Promise<User> {
     //     const user = await this.userModel.findById(userId).select('-password').exec();
 }

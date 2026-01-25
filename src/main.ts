@@ -5,8 +5,12 @@ import { ValidationPipe } from '@nestjs/common/pipes/validation.pipe';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Cấu hình CORS cho nhiều origins (Next.js Admin, Flutter Web, etc.)
   app.enableCors({
-    origin: 'http://localhost:3000', 
+    origin: true, // Allow all origins temporarily for testing
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
   });
 
   app.useGlobalPipes(new ValidationPipe());

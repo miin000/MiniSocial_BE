@@ -1,7 +1,11 @@
 // src/users/dto/update-user.dto.ts
-import { IsString, IsOptional, IsUrl, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsUrl, IsNotEmpty, IsEmail, IsArray, IsEnum } from 'class-validator';
+import { UserStatus } from '../schemas/user.scheme';
 
 export class UpdateUserDto {
+    @IsEmail()
+    @IsOptional()
+    email?: string;
 
     @IsString()
     @IsOptional()
@@ -30,4 +34,18 @@ export class UpdateUserDto {
     @IsString()
     @IsOptional()
     birthdate?: Date;
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    roles_admin?: string[];
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    roles_group?: string[];
+
+    @IsOptional()
+    @IsEnum(UserStatus)
+    status?: UserStatus;
 }
