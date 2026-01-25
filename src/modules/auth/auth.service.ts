@@ -80,4 +80,42 @@ export class AuthService {
       },
     };
   }
+
+  async changePassword(userId: string, changePasswordDto: any) {
+    const { current_password, new_password, confirm_password } = changePasswordDto;
+
+    // Validate passwords match
+    if (new_password !== confirm_password) {
+      throw new UnauthorizedException('Passwords do not match');
+    }
+
+    // Get user with password field
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Get user with password field (need to select it explicitly)
+    const userWithPassword = await this.usersService.findOneByEmail(user.email);
+    if (!userWithPassword) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(current_password, userWithPassword.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(new_password, 10);
+
+    // Update password
+    const updatedUser = await this.usersService.updateUser(userId, {
+      password: hashedNewPassword,
+    });
+
+    const { password: _pw, ...result } = updatedUser.toObject();
+    return result;
+  }
 }

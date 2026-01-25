@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConversationParticipantsModule } from './modules/conversation-participants/conversation-participants.module';
@@ -17,6 +19,7 @@ import { CommentsModule } from './modules/comments/comments.module';
 import { PostsModule } from './modules/posts/posts.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from 'modules/auth/auth.module';
+import { UploadModule } from './modules/upload/upload.module';
 
 @Module({
   imports: [
@@ -39,6 +42,7 @@ import { AuthModule } from 'modules/auth/auth.module';
     UsersModule,
     PostsModule,
     AuthModule,
+    UploadModule,
     CommentsModule,
     NotificationsModule,
     ConversationsModule,
@@ -49,6 +53,11 @@ import { AuthModule } from 'modules/auth/auth.module';
     LikesModule,
     MessagesModule,
     
+    // Serve static files from uploads directory (must be last)
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+    }),
   ],
   controllers: [AppController],
   providers: [AppService],

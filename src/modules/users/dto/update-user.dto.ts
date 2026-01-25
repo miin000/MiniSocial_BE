@@ -1,5 +1,5 @@
 // src/users/dto/update-user.dto.ts
-import { IsString, IsOptional, IsUrl, IsNotEmpty, IsEmail, IsArray, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsUrl, IsNotEmpty, IsEmail, IsArray, IsEnum, IsBoolean } from 'class-validator';
 import { UserStatus } from '../schemas/user.scheme';
 
 export class UpdateUserDto {
@@ -9,15 +9,19 @@ export class UpdateUserDto {
 
     @IsString()
     @IsOptional()
-    username: string;
+    username?: string;
 
     @IsString()
     @IsOptional()
     full_name?: string;
 
-    @IsUrl()
+    @IsString()
     @IsOptional()
     avatar_url?: string;
+
+    @IsString()
+    @IsOptional()
+    avatar?: string;
 
     @IsString()
     @IsOptional()
@@ -48,4 +52,15 @@ export class UpdateUserDto {
     @IsOptional()
     @IsEnum(UserStatus)
     status?: UserStatus;
+
+    @IsOptional()
+    preferences?: {
+        email_notifications?: boolean;
+        two_factor_auth?: boolean;
+        activity_alerts?: boolean;
+    };
+
+    @IsString()
+    @IsOptional()
+    password?: string;
 }

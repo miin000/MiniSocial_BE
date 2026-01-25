@@ -28,4 +28,12 @@ export class AuthController {
     // req.user được gán từ hàm validate() của JwtStrategy
     return req.user;
   }
+
+  // Đổi mật khẩu
+  @UseGuards(AuthGuard('jwt'))
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(@Request() req, @Body() changePasswordDto: any) {
+    return this.authService.changePassword(req.user.user_id, changePasswordDto);
+  }
 }

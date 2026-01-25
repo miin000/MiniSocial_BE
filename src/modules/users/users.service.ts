@@ -1,12 +1,15 @@
 ﻿
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './schemas/user.scheme';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
+    private readonly logger = new Logger(UsersService.name);
+    
     constructor(
         @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     ) { }
@@ -17,10 +20,12 @@ export class UsersService {
     }
 
     async findById(id: String): Promise<UserDocument> {
+        this.logger.debug(`Finding user by ID: ${id}`);
         const user = await this.userModel.findById(id).exec();
         
         if (!user) {
-            throw new Error('User not found');
+            this.logger.warn(`User not found with ID: ${id}`);
+            throw new NotFoundException(`User with ID ${id} not found`);
         }
 
         return user;
@@ -39,18 +44,22 @@ export class UsersService {
         return this.userModel.find().select('-password').exec();
     }
 
-    async updateUser(id: string, updateData: Partial<CreateUserDto>): Promise<UserDocument> {
+    async updateUser(id: string, updateData: UpdateUserDto): Promise<UserDocument> {
+        this.logger.debug(`Updating user ${id} with data:`, updateData);
         const updatedUser = await this.userModel.findByIdAndUpdate(id, updateData, { new: true }).select('-password').exec();
         if (!updatedUser) {
-            throw new Error('User not found');
+            this.logger.warn(`User not found for update with ID: ${id}`);
+            throw new NotFoundException(`User with ID ${id} not found`);
         }
+        this.logger.debug(`User updated successfully: ${id}`);
         return updatedUser;
     }
 
     async deleteUser(id: string): Promise<void> {
         const result = await this.userModel.findByIdAndDelete(id).exec();
         if (!result) {
-            throw new Error('User not found');
+            this.logger.warn(`User not found for delete with ID: ${id}`);
+            throw new NotFoundException(`User with ID ${id} not found`);
         }
     }
 
@@ -62,7 +71,7 @@ export class UsersService {
             { new: true }
         ).select('-password').exec();
         if (!updatedUser) {
-            throw new Error('User not found');
+            throw new NotFoundException(`User with ID ${id} not found`);
         }
         return updatedUser;
     }
@@ -74,7 +83,7 @@ export class UsersService {
             { new: true }
         ).select('-password').exec();
         if (!updatedUser) {
-            throw new Error('User not found');
+            throw new NotFoundException(`User with ID ${id} not found`);
         }
         return updatedUser;
     }
