@@ -56,7 +56,7 @@ import { UploadModule } from './modules/upload/upload.module';
     // Serve static files from uploads directory (must be last)
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'uploads'),
-      serveRoot: '/uploads',
+      serveRoot: '/api/v1/uploads',
     }),
   ],
   controllers: [AppController],

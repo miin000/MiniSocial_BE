@@ -37,8 +37,8 @@ export class UploadService {
       fs.writeFileSync(filePath, file.buffer);
       this.logger.log(`File saved successfully: ${filePath}`);
 
-      // Return relative URL
-      const relativeUrl = `/uploads/avatars/${userId}/${fileName}`;
+      // Return relative URL 
+      const relativeUrl = `/api/v1/uploads/avatars/${userId}/${fileName}`;
       return relativeUrl;
     } catch (error: any) {
       this.logger.error(`Error uploading file: ${error.message}`, error.stack);
