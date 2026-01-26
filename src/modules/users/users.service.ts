@@ -4,7 +4,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './schemas/user.scheme';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -42,17 +41,6 @@ export class UsersService {
     // Admin methods
     async findAll(): Promise<UserDocument[]> {
         return this.userModel.find().select('-password').exec();
-    }
-
-    async updateUser(id: string, updateData: UpdateUserDto): Promise<UserDocument> {
-        this.logger.debug(`Updating user ${id} with data:`, updateData);
-        const updatedUser = await this.userModel.findByIdAndUpdate(id, updateData, { new: true }).select('-password').exec();
-        if (!updatedUser) {
-            this.logger.warn(`User not found for update with ID: ${id}`);
-            throw new NotFoundException(`User with ID ${id} not found`);
-        }
-        this.logger.debug(`User updated successfully: ${id}`);
-        return updatedUser;
     }
 
     async deleteUser(id: string): Promise<void> {

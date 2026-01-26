@@ -6,7 +6,6 @@ import { UserActivityLog } from './schemas/user-activity-log.schema';
 import { SystemLogs } from './schemas/system-logs.schema';
 import { SystemSettings } from './schemas/system-settings.schema';
 import { UsersService } from '../users/users.service';
-import { UpdateUserDto } from '../users/dto/update-user.dto';
 
 @Injectable()
 export class AdminService {
@@ -20,10 +19,6 @@ export class AdminService {
     // User management methods
     async getAllUsers() {
         return this.usersService.findAll();
-    }
-
-    async updateUser(id: string, updateUserDto: UpdateUserDto) {
-        return this.usersService.updateUser(id, updateUserDto);
     }
 
     async deleteUser(id: string) {

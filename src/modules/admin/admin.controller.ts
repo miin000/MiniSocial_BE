@@ -1,7 +1,6 @@
 ﻿
 import { Controller, Get, Put, Delete, Param, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
-import { UpdateUserDto } from '../users/dto/update-user.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -22,12 +21,6 @@ export class AdminController {
   @Get('users')
   async getAllUsers() {
     return this.adminService.getAllUsers();
-  }
-
-  @Put('users/:id')
-  @HttpCode(HttpStatus.OK)
-  async updateUser(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.adminService.updateUser(id, updateUserDto);
   }
 
   @Delete('users/:id')
