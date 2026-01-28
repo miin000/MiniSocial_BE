@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { MulterModule } from '@nestjs/platform-express';
 import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -35,6 +36,10 @@ import { UploadModule } from './modules/upload/upload.module';
         uri: configService.get<string>('MONGODB_URL'),
       }),
       inject: [ConfigService],
+    }),
+    
+    MulterModule.register({
+      dest: './uploads',
     }),
     
     AdminModule,

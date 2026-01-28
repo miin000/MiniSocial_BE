@@ -12,4 +12,26 @@ export class UsersController {
   getProfile(@Request() req) {
     return this.usersService.findById(req.user.user_id);
   }
+
+  // Cập nhật profile
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('profile')
+  updateProfile(@Request() req, @Body() body: { full_name?: string; bio?: string; phone?: string; gender?: string; birthdate?: Date }) {
+    return this.usersService.updateProfile(req.user.user_id, body);
+  }
+
+  // Đổi password
+  @UseGuards(AuthGuard('jwt'))
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  changePassword(@Request() req, @Body() body: { old_password: string; new_password: string }) {
+    return this.usersService.changePassword(req.user.user_id, body.old_password, body.new_password);
+  }
+
+  // Cập nhật avatar
+  @UseGuards(AuthGuard('jwt'))
+  @Post('avatar')
+  updateAvatar(@Request() req, @Body() body: { avatar_url: string }) {
+    return this.usersService.updateAvatar(req.user.user_id, body.avatar_url);
+  }
 }

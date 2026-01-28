@@ -6,10 +6,10 @@ export type GroupDocument = HydratedDocument<Group>;
 
 @Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Group {
-    @Prop()
+    @Prop({ required: true })
     creator_id: string;
 
-    @Prop()
+    @Prop({ required: true })
     name: string;
 
     @Prop()
@@ -21,17 +21,20 @@ export class Group {
     @Prop()
     cover_url: string;
 
-    @Prop()
+    @Prop({ default: 0 })
     members_count: number;
 
-    @Prop()
+    @Prop({ default: 0 })
     pending_posts: number;
 
-    @Prop()
+    @Prop({ default: 0 })
     pending_members: number;
 
-    @Prop()
+    @Prop({ default: false })
     require_post_approval: boolean;
+
+    @Prop({ type: String, enum: ['active', 'blocked'], default: 'active' })
+    status: 'active' | 'blocked';
 
     created_at: Date;
     updated_at: Date;

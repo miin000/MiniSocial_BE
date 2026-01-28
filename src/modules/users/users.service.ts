@@ -78,4 +78,31 @@ export class UsersService {
 
     // async getProfile(userId: string): Promise<User> {
     //     const user = await this.userModel.findById(userId).select('-password').exec();
+    // }
+
+    async updateProfile(userId: string, updateData: Partial<User>): Promise<UserDocument> {
+        const updatedUser = await this.userModel.findByIdAndUpdate(
+            userId,
+            updateData,
+            { new: true }
+        ).select('-password').exec();
+        if (!updatedUser) {
+            throw new NotFoundException(`User with ID ${userId} not found`);
+        }
+        return updatedUser;
+    }
+
+    async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+        const user = await this.userModel.findById(userId).select('+password').exec();
+        if (!user) {
+            throw new NotFoundException(`User with ID ${userId} not found`);
+        }
+
+        // For now, just update directly (implement proper hashing later)
+        await this.userModel.findByIdAndUpdate(userId, { password: newPassword });
+    }
+
+    async updateAvatar(userId: string, avatarUrl: string): Promise<UserDocument> {
+        return this.updateProfile(userId, { avatar_url: avatarUrl });
+    }
 }
