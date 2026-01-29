@@ -39,4 +39,23 @@ export class AdminController {
   async unblockUser(@Param('id') id: string) {
     return this.adminService.unblockUser(id);
   }
+
+  // Group management endpoints
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('groups')
+  async getAllGroups() {
+    return this.adminService.getAllGroups();
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('groups/:id/details')
+  async getGroupDetails(@Param('id') id: string) {
+    return this.adminService.getGroupDetails(id);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Put('groups/:id/status')
+  async toggleGroupStatus(@Param('id') id: string, @Body() body: { status: 'active' | 'blocked' }) {
+    return this.adminService.toggleGroupStatus(id, body.status);
+  }
 }

@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './schemas/user.scheme';
 import { CreateUserDto } from './dto/create-user.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
@@ -98,8 +99,17 @@ export class UsersService {
             throw new NotFoundException(`User with ID ${userId} not found`);
         }
 
-        // For now, just update directly (implement proper hashing later)
-        await this.userModel.findByIdAndUpdate(userId, { password: newPassword });
+        // Verify old password
+        const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password);
+        if (!isOldPasswordValid) {
+            throw new BadRequestException('Old password is incorrect');
+        }
+
+        // Hash new password
+        const saltRounds = 10;
+        const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+        await this.userModel.findByIdAndUpdate(userId, { password: hashedNewPassword });
     }
 
     async updateAvatar(userId: string, avatarUrl: string): Promise<UserDocument> {

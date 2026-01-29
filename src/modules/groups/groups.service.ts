@@ -18,6 +18,10 @@ export class GroupsService {
         return this.groupModel.findById(id);
     }
 
+    async getAllGroups(): Promise<Group[]> {
+        return this.groupModel.find({ status: 'ACTIVE' });
+    }
+
     // UC5.3: Create group
     async createGroup(creatorId: string, groupData: Partial<Group>): Promise<Group> {
         const group = new this.groupModel({ ...groupData, creator_id: creatorId });
@@ -110,7 +114,7 @@ export class GroupsService {
     // UC5.9: Approve member (mod/admin)
     async approveMember(groupId: string, approverId: string, memberId: string): Promise<GroupMember> {
         const approver = await this.groupMemberModel.findOne({ group_id: groupId, user_id: approverId });
-        if (!approver || approver.role === 'MEMBER') throw new Error('Unauthorized');
+        if (!approver || (approver.role !== 'MODERATOR' && approver.role !== 'ADMIN')) throw new Error('Unauthorized');
 
         const member = await this.groupMemberModel.findByIdAndUpdate(
             memberId,
@@ -129,7 +133,7 @@ export class GroupsService {
     // UC5.10: Remove member (mod/admin)
     async removeMember(groupId: string, removerId: string, memberId: string): Promise<void> {
         const remover = await this.groupMemberModel.findOne({ group_id: groupId, user_id: removerId });
-        if (!remover || remover.role === 'MEMBER') throw new Error('Unauthorized');
+        if (!remover || (remover.role !== 'MODERATOR' && remover.role !== 'ADMIN')) throw new Error('Unauthorized');
 
         const member = await this.groupMemberModel.findById(memberId);
         if (!member) throw new Error('Member not found');
@@ -141,7 +145,7 @@ export class GroupsService {
     // UC5.11: Get members list (mod/admin)
     async getMembers(groupId: string, userId: string): Promise<GroupMember[]> {
         const user = await this.groupMemberModel.findOne({ group_id: groupId, user_id: userId });
-        if (!user || user.role === 'MEMBER') throw new Error('Unauthorized');
+        if (!user || (user.role !== 'MODERATOR' && user.role !== 'ADMIN')) throw new Error('Unauthorized');
 
         return this.groupMemberModel.find({ group_id: groupId }).populate('user_id');
     }
@@ -194,7 +198,7 @@ export class GroupsService {
     // UC5.6: Approve post (mod/admin)
     async approvePost(groupId: string, approverId: string, postId: string): Promise<GroupPost> {
         const approver = await this.groupMemberModel.findOne({ group_id: groupId, user_id: approverId });
-        if (!approver || approver.role === 'MEMBER') throw new Error('Unauthorized');
+        if (!approver || (approver.role !== 'MODERATOR' && approver.role !== 'ADMIN')) throw new Error('Unauthorized');
 
         const post = await this.groupPostModel.findByIdAndUpdate(
             postId,
@@ -207,34 +211,22 @@ export class GroupsService {
         return post;
     }
 
-    // UC5.7: Delete post (mod/admin)
     async deletePost(groupId: string, deleterId: string, postId: string): Promise<void> {
         const deleter = await this.groupMemberModel.findOne({ group_id: groupId, user_id: deleterId });
-        if (!deleter || deleter.role === 'MEMBER') throw new Error('Unauthorized');
+        if (!deleter || (deleter.role !== 'MODERATOR' && deleter.role !== 'ADMIN')) throw new Error('Unauthorized');
 
         await this.groupPostModel.findByIdAndDelete(postId);
-    }
-
-    // Admin functions
-    async getAllGroups(): Promise<Group[]> {
-        return this.groupModel.find();
-    }
-
-    async getGroupDetails(groupId: string): Promise<any> {
-        const group = await this.groupModel.findById(groupId);
-        const members = await this.groupMemberModel.find({ group_id: groupId }).populate('user_id');
-        const posts = await this.groupPostModel.find({ group_id: groupId }).populate('user_id');
-
-        return { group, members, posts };
     }
 
     async getGroupPosts(groupId: string): Promise<GroupPost[]> {
         return this.groupPostModel.find({ group_id: groupId, status: 'APPROVED' }).populate('user_id');
     }
 
-    async toggleGroupStatus(groupId: string, status: 'active' | 'blocked'): Promise<Group> {
-        const updatedGroup = await this.groupModel.findByIdAndUpdate(groupId, { status }, { new: true });
-        if (!updatedGroup) throw new Error('Group not found');
-        return updatedGroup;
+    // UC5.12: Get posts list (mod/admin)
+    async getPosts(groupId: string, userId: string): Promise<GroupPost[]> {
+        const user = await this.groupMemberModel.findOne({ group_id: groupId, user_id: userId });
+        if (!user || (user.role !== 'MODERATOR' && user.role !== 'ADMIN')) throw new Error('Unauthorized');
+
+        return this.groupPostModel.find({ group_id: groupId }).populate('user_id');
     }
 }
