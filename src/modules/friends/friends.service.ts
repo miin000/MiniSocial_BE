@@ -68,25 +68,54 @@ export class FriendsService {
 
     // Return simple suggestions (users that are not friends and not the same user)
     async getSuggestions(userId: string, limit = 10) {
-        // fetch all users and filter out existing friends & self — simple implementation
-        const allUsers = await this.usersService.findAll();
+        // Build adjacency map of accepted friendships so we can compute mutual counts.
+        const uid = userId.toString();
 
-        const friends = await this.friendModel
-            .find({ status: 'accepted', $or: [{ user_id_1: userId }, { user_id_2: userId }] })
-            .exec();
+        const allAccepted = await this.friendModel.find({ status: 'accepted' }).exec();
 
-        const friendIds = new Set<string>();
-        friends.forEach((f) => {
-            friendIds.add(f.user_id_1);
-            friendIds.add(f.user_id_2);
+        const adjacency = new Map<string, Set<string>>();
+        const addEdge = (a: any, b: any) => {
+            const as = a.toString();
+            const bs = b.toString();
+            if (!adjacency.has(as)) adjacency.set(as, new Set());
+            adjacency.get(as)!.add(bs);
+        };
+
+        allAccepted.forEach((d) => {
+            addEdge(d.user_id_1, d.user_id_2);
+            addEdge(d.user_id_2, d.user_id_1);
         });
 
-        const suggestions = (allUsers as any[])
-            .filter((u) => u._id.toString() !== userId && !friendIds.has(u._id.toString()))
-            .slice(0, limit)
-            .map((u) => ({ id: u._id, fullName: u.full_name || u.username, avatar: u.avatar || u.avatar_url }));
+        // Set of current user's friends
+        const userFriends = adjacency.get(uid) || new Set<string>();
 
-        return suggestions;
+        // fetch all users and exclude self and existing friends
+        const allUsers = await this.usersService.findAll();
+
+        const candidates = (allUsers as any[])
+            .filter((u) => {
+                const id = u._id.toString();
+                return id !== uid && !userFriends.has(id);
+            })
+            .map((u) => {
+                const id = u._id.toString();
+                const theirFriends = adjacency.get(id) || new Set<string>();
+                // mutual = intersection size between user's friends and candidate's friends
+                let mutual = 0;
+                userFriends.forEach((f) => {
+                    if (theirFriends.has(f)) mutual += 1;
+                });
+                return {
+                    id: u._id,
+                    fullName: u.full_name || u.username,
+                    avatar: u.avatar || u.avatar_url,
+                    mutualCount: mutual,
+                };
+            })
+            .sort((a, b) => b.mutualCount - a.mutualCount)
+            .slice(0, limit);
+
+        return candidates;
     }
 
     // Send friend request
@@ -117,7 +146,14 @@ export class FriendsService {
     async acceptRequest(userId: string, requestId: string) {
         const doc = await this.friendModel.findById(requestId).exec();
         if (!doc) throw new NotFoundException('Request not found');
-        if (doc.user_id_2.toString() !== userId) throw new BadRequestException('Not authorized to accept');
+
+        // Determine recipient based on action_user_id (creator/sender)
+        const actionId = doc.action_user_id ? doc.action_user_id.toString() : null;
+        const u1 = doc.user_id_1 ? doc.user_id_1.toString() : null;
+        const u2 = doc.user_id_2 ? doc.user_id_2.toString() : null;
+
+        const recipient = actionId && u1 === actionId ? u2 : u1;
+        if (!recipient || recipient !== userId.toString()) throw new BadRequestException('Not authorized to accept');
 
         doc.status = 'accepted';
         doc.action_user_id = userId;
@@ -129,7 +165,13 @@ export class FriendsService {
     async rejectRequest(userId: string, requestId: string) {
         const doc = await this.friendModel.findById(requestId).exec();
         if (!doc) throw new NotFoundException('Request not found');
-        if (doc.user_id_2.toString() !== userId) throw new BadRequestException('Not authorized to reject');
+
+        const actionId = doc.action_user_id ? doc.action_user_id.toString() : null;
+        const u1 = doc.user_id_1 ? doc.user_id_1.toString() : null;
+        const u2 = doc.user_id_2 ? doc.user_id_2.toString() : null;
+
+        const recipient = actionId && u1 === actionId ? u2 : u1;
+        if (!recipient || recipient !== userId.toString()) throw new BadRequestException('Not authorized to reject');
 
         doc.status = 'rejected';
         doc.action_user_id = userId;
