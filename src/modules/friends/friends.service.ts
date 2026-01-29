@@ -25,7 +25,7 @@ export class FriendsService {
 
         const results = await Promise.all(
             docs.map(async (d) => {
-                const otherId = d.user_id_1 === userId ? d.user_id_2 : d.user_id_1;
+                const otherId = d.user_id_1.toString() === userId ? d.user_id_2 : d.user_id_1;
                 try {
                     const user = await this.usersService.findById(otherId);
                     return {
@@ -117,7 +117,7 @@ export class FriendsService {
     async acceptRequest(userId: string, requestId: string) {
         const doc = await this.friendModel.findById(requestId).exec();
         if (!doc) throw new NotFoundException('Request not found');
-        if (doc.user_id_2 !== userId) throw new BadRequestException('Not authorized to accept');
+        if (doc.user_id_2.toString() !== userId) throw new BadRequestException('Not authorized to accept');
 
         doc.status = 'accepted';
         doc.action_user_id = userId;
@@ -129,7 +129,7 @@ export class FriendsService {
     async rejectRequest(userId: string, requestId: string) {
         const doc = await this.friendModel.findById(requestId).exec();
         if (!doc) throw new NotFoundException('Request not found');
-        if (doc.user_id_2 !== userId) throw new BadRequestException('Not authorized to reject');
+        if (doc.user_id_2.toString() !== userId) throw new BadRequestException('Not authorized to reject');
 
         doc.status = 'rejected';
         doc.action_user_id = userId;
