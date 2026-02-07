@@ -18,7 +18,7 @@ export class Comment {
     @Prop()
     content: string;
 
-    @Prop()
+    @Prop({ default: 0 })
     likes_count: number;
 
     created_at: Date;

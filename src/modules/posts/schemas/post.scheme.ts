@@ -12,13 +12,13 @@ export class Post {
     @Prop()
     content: string;
 
-    @Prop()
-    media_url: string;
+    @Prop([String])
+    media_urls: string[];
 
     @Prop()
     content_type: string;
 
-    @Prop()
+    @Prop({ default: 'active' })
     status: string;
 
     @Prop()
@@ -27,13 +27,13 @@ export class Post {
     @Prop()
     approved_at: Date;
 
-    @Prop()
+    @Prop({ default: 0 })
     likes_count: number;
 
-    @Prop()
+    @Prop({ default: 0 })
     comments_count: number;
 
-    @Prop()
+    @Prop({ default: 0 })
     shares_count: number;
 
     created_at: Date;
