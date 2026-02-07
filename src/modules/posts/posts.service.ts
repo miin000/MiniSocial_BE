@@ -114,7 +114,7 @@ export class PostsService {
             .lean()
             .exec();
 
-        const userMap = new Map(users.map(user => [user._id.toString(), user]));
+        const userMap = new Map(users.map(user => [(user as any)._id.toString(), user]));
 
         // If currentUserId is provided, check which posts the user has liked
         let likedPostIds = new Set();

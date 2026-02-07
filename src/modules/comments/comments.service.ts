@@ -79,7 +79,7 @@ export class CommentsService {
             .lean()
             .exec();
 
-        const userMap = new Map(users.map(user => [user._id.toString(), user]));
+        const userMap = new Map(users.map(user => [(user as any)._id.toString(), user]));
 
         // If currentUserId is provided, check which comments the user has liked
         let likedCommentIds = new Set();
