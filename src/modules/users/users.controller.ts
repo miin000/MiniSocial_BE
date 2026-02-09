@@ -34,4 +34,12 @@ export class UsersController {
   updateAvatar(@Request() req, @Body() body: { avatar_url: string }) {
     return this.usersService.updateAvatar(req.user.user_id, body.avatar_url);
   }
+
+  // 🔧 TEMPORARY: Set current user as admin (remove after first use)
+  @UseGuards(AuthGuard('jwt'))
+  @Post('make-me-admin')
+  @HttpCode(HttpStatus.OK)
+  async makeMeAdmin(@Request() req) {
+    return this.usersService.setUserAdminRole(req.user.user_id);
+  }
 }

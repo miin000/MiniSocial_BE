@@ -33,18 +33,25 @@ export class RolesGuard implements CanActivate {
         const user = request.user;
 
         if (!user) {
+            console.log('❌ RolesGuard: No user in request');
             return false;
         }
 
         /**
-         * Ví dụ user:
-         * user.adminRole?: UserRoleAdmin
-         * user.groupRole?: UserRoleGroup
+         * Lấy tất cả roles từ user (roles_admin và roles_group là arrays)
          */
         const userRoles: AppRole[] = [
-            user.adminRole,
-            user.groupRole,
-        ].filter(Boolean);
+            ...(user.roles_admin || []),
+            ...(user.roles_group || []),
+        ];
+
+        console.log('🔒 RolesGuard Check:');
+        console.log('  Required roles:', requiredRoles);
+        console.log('  User:', user.username || user.email);
+        console.log('  User roles_admin:', user.roles_admin);
+        console.log('  User roles_group:', user.roles_group);
+        console.log('  Combined roles:', userRoles);
+        console.log('  Access granted:', requiredRoles.some((role) => userRoles.includes(role)));
 
         return requiredRoles.some((role) =>
             userRoles.includes(role),

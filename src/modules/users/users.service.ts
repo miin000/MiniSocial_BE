@@ -115,4 +115,27 @@ export class UsersService {
     async updateAvatar(userId: string, avatarUrl: string): Promise<UserDocument> {
         return this.updateProfile(userId, { avatar_url: avatarUrl });
     }
+
+    // 🔧 TEMPORARY: Set user as admin
+    async setUserAdminRole(userId: string): Promise<any> {
+        const user = await this.userModel.findByIdAndUpdate(
+            userId,
+            { $set: { roles_admin: ['ADMIN'] } },
+            { new: true }
+        ).select('-password').exec();
+
+        if (!user) {
+            throw new NotFoundException(`User with ID ${userId} not found`);
+        }
+
+        this.logger.log(`✅ User ${user.username} is now ADMIN`);
+        return {
+            message: 'User role updated to ADMIN',
+            user: {
+                username: user.username,
+                email: user.email,
+                roles_admin: user.roles_admin,
+            }
+        };
+    }
 }
