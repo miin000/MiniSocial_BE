@@ -14,27 +14,27 @@ export class AdminController {
 
   // User management endpoints
   @Roles(UserRoleAdmin.ADMIN || UserRoleAdmin.MODERATOR)
-  @Get('users')
+  @Get('admin/users')
   async getAllUsers() {
     return this.adminService.getAllUsers();
   }
 
   @Roles(UserRoleAdmin.ADMIN)
-  @Delete('users/:id')
+  @Delete('admin/users/:id')
   @HttpCode(HttpStatus.OK)
   async deleteUser(@Param('id') id: string) {
     return this.adminService.deleteUser(id);
   }
 
   @Roles(UserRoleAdmin.ADMIN)
-  @Put('users/:id/block')
+  @Put('admin/users/:id/block')
   @HttpCode(HttpStatus.OK)
   async blockUser(@Param('id') id: string) {
     return this.adminService.blockUser(id);
   }
 
   @Roles(UserRoleAdmin.ADMIN)
-  @Put('users/:id/unblock')
+  @Put('admin/users/:id/unblock')
   @HttpCode(HttpStatus.OK)
   async unblockUser(@Param('id') id: string) {
     return this.adminService.unblockUser(id);
@@ -42,13 +42,13 @@ export class AdminController {
 
   // Group management endpoints
   @Roles(UserRoleAdmin.ADMIN)
-  @Get('groups')
+  @Get('admin/groups')
   async getAllGroups() {
     return this.adminService.getAllGroups();
   }
 
   @Roles(UserRoleAdmin.ADMIN)
-  @Get('groups/:id/details')
+  @Get('admin/groups/:id/details')
   async getGroupDetails(@Param('id') id: string) {
     return this.adminService.getGroupDetails(id);
   }
