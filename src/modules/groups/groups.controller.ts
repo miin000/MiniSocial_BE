@@ -1,10 +1,20 @@
 ﻿
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Query, HttpException, HttpStatus } from '@nestjs/common';
 import { GroupsService } from './groups.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRoleGroup } from '../users/schemas/user.scheme';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
+import { CreateGroupPostDto } from './dto/create-group-post.dto';
+import { InviteMemberDto } from './dto/invite-member.dto';
+import { TransferAdminDto } from './dto/transfer-admin.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { RejectPostDto } from './dto/reject-post.dto';
+import { GroupRoles } from './decorators/group-roles.decorator';
+import { GroupRolesGuard } from './guards/group-roles.guard';
+import { GroupMemberRole } from './schemas/group-member.scheme';
 
 @Controller('groups')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -14,126 +24,276 @@ export class GroupsController {
   // UC5.3: Create group
   @Post()
   @Roles(UserRoleGroup.MEMBER)
-  createGroup(@Request() req, @Body() body: { name: string; description?: string; avatar_url?: string; cover_url?: string; require_post_approval?: boolean }) {
-    return this.groupsService.createGroup(req.user.userId, body);
+  async createGroup(@Request() req, @Body() createGroupDto: CreateGroupDto) {
+    try {
+      return await this.groupsService.createGroup(req.user.userId, createGroupDto);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to create group', HttpStatus.BAD_REQUEST);
+    }
   }
 
-  // Get all groups (for users)
+  // Get all groups (for users) - My groups and suggested
   @Get()
   @Roles(UserRoleGroup.MEMBER)
-  findAll() {
-    return this.groupsService.getAllGroups();
+  async findAll(@Request() req) {
+    try {
+      return await this.groupsService.getGroupsForUser(req.user.userId);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to get groups', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   // Get group by id
   @Get(':id')
   @Roles(UserRoleGroup.MEMBER)
-  findOne(@Param('id') id: string) {
-    return this.groupsService.findGroupById(id);
+  async findOne(@Param('id') id: string, @Request() req) {
+    try {
+      return await this.groupsService.getGroupDetail(id, req.user.userId);
+    } catch (error) {
+      throw new HttpException(error.message || 'Group not found', HttpStatus.NOT_FOUND);
+    }
   }
 
   // UC5.4: Update group (admin)
   @Put(':id')
-  @Roles(UserRoleGroup.ADMIN)
-  updateGroup(@Param('id') id: string, @Request() req, @Body() body: Partial<any>) {
-    return this.groupsService.updateGroup(id, req.user.userId, body);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.ADMIN)
+  async updateGroup(@Param('id') id: string, @Request() req, @Body() updateGroupDto: UpdateGroupDto) {
+    try {
+      return await this.groupsService.updateGroup(id, req.user.userId, updateGroupDto);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to update group', HttpStatus.BAD_REQUEST);
+    }
   }
 
   // UC5.5: Delete group (admin)
   @Delete(':id')
-  @Roles(UserRoleGroup.ADMIN)
-  deleteGroup(@Param('id') id: string, @Request() req) {
-    return this.groupsService.deleteGroup(id, req.user.userId);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.ADMIN)
+  async deleteGroup(@Param('id') id: string, @Request() req) {
+    try {
+      await this.groupsService.deleteGroup(id, req.user.userId);
+      return { message: 'Group deleted successfully' };
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to delete group', HttpStatus.BAD_REQUEST);
+    }
   }
 
-  // UC5.1: Join group
+  // UC5.1: Join group (request to join)
   @Post(':id/join')
   @Roles(UserRoleGroup.MEMBER)
-  joinGroup(@Param('id') id: string, @Request() req) {
-    return this.groupsService.joinGroup(id, req.user.userId);
+  async joinGroup(@Param('id') id: string, @Request() req) {
+    try {
+      return await this.groupsService.joinGroup(id, req.user.userId);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to join group', HttpStatus.BAD_REQUEST);
+    }
   }
 
   // UC5.2: Leave group
   @Post(':id/leave')
   @Roles(UserRoleGroup.MEMBER)
-  leaveGroup(@Param('id') id: string, @Request() req) {
-    return this.groupsService.leaveGroup(id, req.user.userId);
+  async leaveGroup(@Param('id') id: string, @Request() req) {
+    try {
+      await this.groupsService.leaveGroup(id, req.user.userId);
+      return { message: 'Left group successfully' };
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to leave group', HttpStatus.BAD_REQUEST);
+    }
   }
 
   // UC5.8: Invite member
   @Post(':id/invite')
-  @Roles(UserRoleGroup.MEMBER)
-  inviteMember(@Param('id') id: string, @Request() req, @Body() body: { user_id: string }) {
-    return this.groupsService.inviteMember(id, req.user.userId, body.user_id);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async inviteMember(@Param('id') id: string, @Request() req, @Body() inviteMemberDto: InviteMemberDto) {
+    try {
+      return await this.groupsService.inviteMember(id, req.user.userId, inviteMemberDto.user_id);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to invite member', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // Get pending join requests
+  @Get(':id/pending-members')
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async getPendingMembers(@Param('id') id: string, @Request() req) {
+    try {
+      return await this.groupsService.getPendingMembers(id, req.user.userId);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to get pending members', HttpStatus.BAD_REQUEST);
+    }
   }
 
   // UC5.9: Approve member
   @Post(':id/members/:memberId/approve')
-  @Roles(UserRoleGroup.MODERATOR, UserRoleGroup.ADMIN)
-  approveMember(@Param('id') id: string, @Param('memberId') memberId: string, @Request() req) {
-    return this.groupsService.approveMember(id, req.user.userId, memberId);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async approveMember(@Param('id') id: string, @Param('memberId') memberId: string, @Request() req) {
+    try {
+      return await this.groupsService.approveMember(id, req.user.userId, memberId);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to approve member', HttpStatus.BAD_REQUEST);
+    }
   }
 
-  // UC5.10: Remove member
+  // Reject member request
+  @Post(':id/members/:memberId/reject')
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async rejectMember(@Param('id') id: string, @Param('memberId') memberId: string, @Request() req) {
+    try {
+      await this.groupsService.rejectMember(id, req.user.userId, memberId);
+      return { message: 'Member request rejected' };
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to reject member', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // UC5.10: Remove/Block member
   @Delete(':id/members/:memberId')
-  @Roles(UserRoleGroup.MODERATOR, UserRoleGroup.ADMIN)
-  removeMember(@Param('id') id: string, @Param('memberId') memberId: string, @Request() req) {
-    return this.groupsService.removeMember(id, req.user.userId, memberId);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async removeMember(@Param('id') id: string, @Param('memberId') memberId: string, @Request() req) {
+    try {
+      await this.groupsService.removeMember(id, req.user.userId, memberId);
+      return { message: 'Member removed successfully' };
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to remove member', HttpStatus.BAD_REQUEST);
+    }
   }
 
   // UC5.11: Get members
   @Get(':id/members')
-  @Roles(UserRoleGroup.MODERATOR, UserRoleGroup.ADMIN)
-  getMembers(@Param('id') id: string, @Request() req) {
-    return this.groupsService.getMembers(id, req.user.userId);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MEMBER, GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async getMembers(@Param('id') id: string, @Request() req, @Query('status') status?: string) {
+    try {
+      return await this.groupsService.getMembers(id, req.user.userId, status);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to get members', HttpStatus.BAD_REQUEST);
+    }
   }
 
-  // UC5.12: Promote to moderator
-  @Post(':id/members/:memberId/promote')
-  @Roles(UserRoleGroup.ADMIN)
-  promoteToModerator(@Param('id') id: string, @Param('memberId') memberId: string, @Request() req) {
-    return this.groupsService.promoteToModerator(id, req.user.userId, memberId);
+  // UC5.12: Update member role (admin only)
+  @Put(':id/members/:memberId/role')
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.ADMIN)
+  async updateMemberRole(
+    @Param('id') id: string, 
+    @Param('memberId') memberId: string, 
+    @Request() req, 
+    @Body() updateRoleDto: UpdateMemberRoleDto
+  ) {
+    try {
+      return await this.groupsService.updateMemberRole(id, req.user.userId, memberId, updateRoleDto.role);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to update member role', HttpStatus.BAD_REQUEST);
+    }
   }
 
   // UC5.13: Transfer admin
   @Post(':id/transfer-admin')
-  @Roles(UserRoleGroup.ADMIN)
-  transferAdmin(@Param('id') id: string, @Request() req, @Body() body: { new_admin_id: string }) {
-    return this.groupsService.transferAdmin(id, req.user.userId, body.new_admin_id);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.ADMIN)
+  // UC5.13: Transfer admin
+  @Post(':id/transfer-admin')
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.ADMIN)
+  async transferAdmin(@Param('id') id: string, @Request() req, @Body() transferAdminDto: TransferAdminDto) {
+    try {
+      await this.groupsService.transferAdmin(id, req.user.userId, transferAdminDto.new_admin_id);
+      return { message: 'Admin transferred successfully' };
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to transfer admin', HttpStatus.BAD_REQUEST);
+    }
   }
+
+  // ============ GROUP POSTS ============
 
   // Create group post
   @Post(':id/posts')
-  @Roles(UserRoleGroup.MEMBER)
-  createPost(@Param('id') id: string, @Request() req, @Body() body: { content: string; media_url?: string; content_type?: string }) {
-    return this.groupsService.createGroupPost(id, req.user.userId, body);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MEMBER, GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async createPost(@Param('id') id: string, @Request() req, @Body() createPostDto: CreateGroupPostDto) {
+    try {
+      return await this.groupsService.createGroupPost(id, req.user.userId, createPostDto);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to create post', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // Get group posts (approved only for members)
+  @Get(':id/posts')
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MEMBER, GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async getPosts(@Param('id') id: string, @Request() req, @Query('status') status?: string) {
+    try {
+      // If user is moderator/admin, they can see all posts
+      const member = req.groupMember;
+      if (member.role === GroupMemberRole.MODERATOR || member.role === GroupMemberRole.ADMIN) {
+        return await this.groupsService.getAllGroupPosts(id, req.user.userId, status);
+      }
+      // Regular members see only approved posts
+      return await this.groupsService.getGroupPosts(id);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to get posts', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // Get pending posts (moderator/admin only)
+  @Get(':id/posts/pending/list')
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async getPendingPosts(@Param('id') id: string, @Request() req) {
+    try {
+      return await this.groupsService.getPendingPosts(id, req.user.userId);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to get pending posts', HttpStatus.BAD_REQUEST);
+    }
   }
 
   // UC5.6: Approve post
   @Post(':id/posts/:postId/approve')
-  @Roles(UserRoleGroup.MODERATOR, UserRoleGroup.ADMIN)
-  approvePost(@Param('id') id: string, @Param('postId') postId: string, @Request() req) {
-    return this.groupsService.approvePost(id, req.user.userId, postId);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async approvePost(@Param('id') id: string, @Param('postId') postId: string, @Request() req) {
+    try {
+      return await this.groupsService.approvePost(id, req.user.userId, postId);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to approve post', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // Reject post
+  @Post(':id/posts/:postId/reject')
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async rejectPost(
+    @Param('id') id: string, 
+    @Param('postId') postId: string, 
+    @Request() req, 
+    @Body() rejectPostDto: RejectPostDto
+  ) {
+    try {
+      await this.groupsService.rejectPost(id, req.user.userId, postId, rejectPostDto.rejected_reason);
+      return { message: 'Post rejected' };
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to reject post', HttpStatus.BAD_REQUEST);
+    }
   }
 
   // UC5.7: Delete post
   @Delete(':id/posts/:postId')
-  @Roles(UserRoleGroup.MODERATOR, UserRoleGroup.ADMIN)
-  deletePost(@Param('id') id: string, @Param('postId') postId: string, @Request() req) {
-    return this.groupsService.deletePost(id, req.user.userId, postId);
-  }
-
-  // Get group posts
-  @Get(':id/posts')
-  @Roles(UserRoleGroup.MEMBER)
-  getPosts(@Param('id') id: string) {
-    return this.groupsService.getGroupPosts(id);
-  }
-
-  // UC5.12: Get all posts (mod/admin)
-  @Get(':id/posts/all')
-  @Roles(UserRoleGroup.MODERATOR, UserRoleGroup.ADMIN)
-  getAllPosts(@Param('id') id: string, @Request() req) {
-    return this.groupsService.getPosts(id, req.user.userId);
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)
+  async deletePost(@Param('id') id: string, @Param('postId') postId: string, @Request() req) {
+    try {
+      await this.groupsService.deletePost(id, req.user.userId, postId);
+      return { message: 'Post deleted successfully' };
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to delete post', HttpStatus.BAD_REQUEST);
+    }
   }
 }

@@ -3,21 +3,22 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { GroupsService } from './groups.service';
 import { GroupsController } from './groups.controller';
-import { GroupSchema } from './schemas/group.scheme';
-import { GroupMemberSchema } from './schemas/group-member.scheme';
-import { GroupPostSchema } from './schemas/group-post.scheme';
+import { Group, GroupSchema } from './schemas/group.scheme';
+import { GroupMember, GroupMemberSchema } from './schemas/group-member.scheme';
+import { GroupPost, GroupPostSchema } from './schemas/group-post.scheme';
+import { GroupRolesGuard } from './guards/group-roles.guard';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: 'Group', schema: GroupSchema },
-      { name: 'GroupMember', schema: GroupMemberSchema },
-      { name: 'GroupPost', schema: GroupPostSchema },
+      { name: Group.name, schema: GroupSchema },
+      { name: GroupMember.name, schema: GroupMemberSchema },
+      { name: GroupPost.name, schema: GroupPostSchema },
     ])
   ],
-
   controllers: [GroupsController],
-  providers: [GroupsService],
+  providers: [GroupsService, GroupRolesGuard],
   exports: [GroupsService],
 })
 export class GroupsModule {}
+

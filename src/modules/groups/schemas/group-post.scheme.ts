@@ -20,8 +20,8 @@ export class GroupPost {
     @Prop()
     content: string;
 
-    @Prop()
-    media_url: string;
+    @Prop({ type: [String], default: [] })
+    media_urls: string[];
 
     @Prop()
     content_type: string;

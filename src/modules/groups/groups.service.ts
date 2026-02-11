@@ -1,10 +1,13 @@
 ﻿
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Group } from './schemas/group.scheme';
-import { GroupMember } from './schemas/group-member.scheme';
-import { GroupPost } from './schemas/group-post.scheme';
+import { GroupMember, GroupMemberRole, GroupMemberStatus } from './schemas/group-member.scheme';
+import { GroupPost, GroupPostStatus } from './schemas/group-post.scheme';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
+import { CreateGroupPostDto } from './dto/create-group-post.dto';
 
 @Injectable()
 export class GroupsService {
@@ -15,171 +18,424 @@ export class GroupsService {
     ) { }
 
     async findGroupById(id: string): Promise<Group | null> {
-        return this.groupModel.findById(id);
+        return this.groupModel.findById(id).exec();
     }
 
     async getAllGroups(): Promise<Group[]> {
-        return this.groupModel.find({ status: 'ACTIVE' });
+        return this.groupModel.find({ status: 'active' }).exec();
+    }
+
+    // Get groups for user (my groups + suggested)
+    async getGroupsForUser(userId: string) {
+        // Get user's groups
+        const userMemberships = await this.groupMemberModel
+            .find({ user_id: userId, status: GroupMemberStatus.ACTIVE })
+            .select('group_id role')
+            .exec();
+
+        const userGroupIds = userMemberships.map(m => m.group_id);
+
+        const myGroups = await this.groupModel
+            .find({ _id: { $in: userGroupIds }, status: 'active' })
+            .exec();
+
+        // Attach role to each group
+        const myGroupsWithRoles = myGroups.map(group => {
+            const membership = userMemberships.find(m => m.group_id === group._id.toString());
+            return {
+                ...group.toObject(),
+                userRole: membership?.role || GroupMemberRole.MEMBER,
+            };
+        });
+
+        // Get suggested groups (groups user is not part of)
+        const suggestedGroups = await this.groupModel
+            .find({ 
+                _id: { $nin: userGroupIds }, 
+                status: 'active' 
+            })
+            .limit(10)
+            .exec();
+
+        return {
+            myGroups: myGroupsWithRoles,
+            suggestedGroups,
+        };
+    }
+
+    // Get group detail with member info
+    async getGroupDetail(groupId: string, userId: string) {
+        const group = await this.groupModel.findById(groupId).exec();
+        if (!group) {
+            throw new NotFoundException('Group not found');
+        }
+
+        const membership = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: userId })
+            .exec();
+
+        return {
+            ...group.toObject(),
+            userRole: membership?.role,
+            userStatus: membership?.status,
+            isMember: !!membership,
+        };
     }
 
     // UC5.3: Create group
-    async createGroup(creatorId: string, groupData: Partial<Group>): Promise<Group> {
-        const group = new this.groupModel({ ...groupData, creator_id: creatorId });
-        const savedGroup = await group.save();
+    async createGroup(creatorId: string, groupData: CreateGroupDto): Promise<Group> {
+        try {
+            const group = new this.groupModel({ 
+                ...groupData, 
+                creator_id: creatorId,
+                members_count: 1,
+            });
+            const savedGroup = await group.save();
 
-        // Add creator as admin member
-        await this.groupMemberModel.create({
-            group_id: savedGroup._id.toString(),
-            user_id: creatorId,
-            role: 'ADMIN',
-            status: 'ACTIVE',
-            joined_at: new Date(),
-        });
+            // Add creator as admin member
+            await this.groupMemberModel.create({
+                group_id: savedGroup._id.toString(),
+                user_id: creatorId,
+                role: GroupMemberRole.ADMIN,
+                status: GroupMemberStatus.ACTIVE,
+                joined_at: new Date(),
+            });
 
-        return savedGroup;
+            return savedGroup;
+        } catch (error) {
+            throw new BadRequestException(`Failed to create group: ${error.message}`);
+        }
     }
 
     // UC5.4: Update group (admin only)
-    async updateGroup(groupId: string, userId: string, updateData: Partial<Group>): Promise<Group> {
-        const member = await this.groupMemberModel.findOne({ group_id: groupId, user_id: userId, role: 'ADMIN' });
-        if (!member) throw new Error('Unauthorized');
+    async updateGroup(groupId: string, userId: string, updateData: UpdateGroupDto): Promise<Group> {
+        const member = await this.groupMemberModel.findOne({ 
+            group_id: groupId, 
+            user_id: userId, 
+            role: GroupMemberRole.ADMIN 
+        }).exec();
+        
+        if (!member) {
+            throw new ForbiddenException('Only group admin can update group');
+        }
 
-        const updatedGroup = await this.groupModel.findByIdAndUpdate(groupId, updateData, { new: true });
-        if (!updatedGroup) throw new Error('Group not found');
+        const updatedGroup = await this.groupModel
+            .findByIdAndUpdate(groupId, updateData, { new: true })
+            .exec();
+            
+        if (!updatedGroup) {
+            throw new NotFoundException('Group not found');
+        }
+        
         return updatedGroup;
     }
 
     // UC5.5: Delete group (admin only)
     async deleteGroup(groupId: string, userId: string): Promise<void> {
-        const member = await this.groupMemberModel.findOne({ group_id: groupId, user_id: userId, role: 'ADMIN' });
-        if (!member) throw new Error('Unauthorized');
+        const member = await this.groupMemberModel.findOne({ 
+            group_id: groupId, 
+            user_id: userId, 
+            role: GroupMemberRole.ADMIN 
+        }).exec();
+        
+        if (!member) {
+            throw new ForbiddenException('Only group admin can delete group');
+        }
 
-        await this.groupModel.findByIdAndDelete(groupId);
-        await this.groupMemberModel.deleteMany({ group_id: groupId });
-        await this.groupPostModel.deleteMany({ group_id: groupId });
+        await this.groupModel.findByIdAndDelete(groupId).exec();
+        await this.groupMemberModel.deleteMany({ group_id: groupId }).exec();
+        await this.groupPostModel.deleteMany({ group_id: groupId }).exec();
     }
 
-    // UC5.1: Join group
+    // UC5.1: Join group (request to join)
     async joinGroup(groupId: string, userId: string): Promise<GroupMember> {
-        const group = await this.groupModel.findById(groupId);
-        if (!group || group.status !== 'active') throw new Error('Group not found or inactive');
+        const group = await this.groupModel.findById(groupId).exec();
+        if (!group || group.status !== 'active') {
+            throw new NotFoundException('Group not found or inactive');
+        }
 
-        const existingMember = await this.groupMemberModel.findOne({ group_id: groupId, user_id: userId });
-        if (existingMember) throw new Error('Already a member');
+        const existingMember = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: userId })
+            .exec();
+            
+        if (existingMember) {
+            if (existingMember.status === GroupMemberStatus.PENDING) {
+                throw new BadRequestException('Join request already pending');
+            }
+            throw new BadRequestException('Already a member');
+        }
 
+        // Always PENDING - requires moderator approval
         const member = await this.groupMemberModel.create({
             group_id: groupId,
             user_id: userId,
-            status: group.require_post_approval ? 'PENDING' : 'ACTIVE',
-            joined_at: new Date(),
+            role: GroupMemberRole.MEMBER,
+            status: GroupMemberStatus.PENDING,
         });
 
-        if (member.status === 'ACTIVE') {
-            await this.groupModel.findByIdAndUpdate(groupId, { $inc: { members_count: 1 } });
-        } else {
-            await this.groupModel.findByIdAndUpdate(groupId, { $inc: { pending_members: 1 } });
-        }
+        await this.groupModel
+            .findByIdAndUpdate(groupId, { $inc: { pending_members: 1 } })
+            .exec();
 
         return member;
     }
 
     // UC5.2: Leave group
     async leaveGroup(groupId: string, userId: string): Promise<void> {
-        const member = await this.groupMemberModel.findOne({ group_id: groupId, user_id: userId });
-        if (!member) throw new Error('Not a member');
+        const member = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: userId })
+            .exec();
+            
+        if (!member) {
+            throw new NotFoundException('Not a member');
+        }
 
-        await this.groupMemberModel.findByIdAndDelete(member._id);
-        await this.groupModel.findByIdAndUpdate(groupId, { $inc: { members_count: -1 } });
+        if (member.role === GroupMemberRole.ADMIN) {
+            // Check if there are other admins
+            const adminCount = await this.groupMemberModel
+                .countDocuments({ group_id: groupId, role: GroupMemberRole.ADMIN })
+                .exec();
+                
+            if (adminCount === 1) {
+                throw new BadRequestException('Cannot leave: You are the only admin. Transfer admin role first.');
+            }
+        }
+
+        await this.groupMemberModel.findByIdAndDelete(member._id).exec();
+        
+        if (member.status === GroupMemberStatus.ACTIVE) {
+            await this.groupModel
+                .findByIdAndUpdate(groupId, { $inc: { members_count: -1 } })
+                .exec();
+        }
     }
 
     // UC5.8: Invite member
     async inviteMember(groupId: string, inviterId: string, inviteeId: string): Promise<GroupMember> {
-        const inviter = await this.groupMemberModel.findOne({ group_id: groupId, user_id: inviterId });
-        if (!inviter || inviter.role === 'MEMBER') throw new Error('Unauthorized');
+        const inviter = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: inviterId })
+            .exec();
+            
+        if (!inviter || inviter.role === GroupMemberRole.MEMBER) {
+            throw new ForbiddenException('Only moderators and admins can invite members');
+        }
 
-        const existing = await this.groupMemberModel.findOne({ group_id: groupId, user_id: inviteeId });
-        if (existing) throw new Error('Already invited or member');
+        const existing = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: inviteeId })
+            .exec();
+            
+        if (existing) {
+            throw new BadRequestException('User already invited or is a member');
+        }
 
         const member = await this.groupMemberModel.create({
             group_id: groupId,
             user_id: inviteeId,
-            status: 'PENDING',
+            role: GroupMemberRole.MEMBER,
+            status: GroupMemberStatus.PENDING,
             invited_by: inviterId,
         });
 
-        await this.groupModel.findByIdAndUpdate(groupId, { $inc: { pending_members: 1 } });
+        await this.groupModel
+            .findByIdAndUpdate(groupId, { $inc: { pending_members: 1 } })
+            .exec();
+            
         return member;
+    }
+
+    // Get pending members
+    async getPendingMembers(groupId: string, userId: string) {
+        const user = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: userId })
+            .exec();
+            
+        if (!user || (user.role !== GroupMemberRole.MODERATOR && user.role !== GroupMemberRole.ADMIN)) {
+            throw new ForbiddenException('Only moderators and admins can view pending members');
+        }
+
+        return this.groupMemberModel
+            .find({ group_id: groupId, status: GroupMemberStatus.PENDING })
+            .exec();
     }
 
     // UC5.9: Approve member (mod/admin)
     async approveMember(groupId: string, approverId: string, memberId: string): Promise<GroupMember> {
-        const approver = await this.groupMemberModel.findOne({ group_id: groupId, user_id: approverId });
-        if (!approver || (approver.role !== 'MODERATOR' && approver.role !== 'ADMIN')) throw new Error('Unauthorized');
+        const approver = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: approverId })
+            .exec();
+            
+        if (!approver || (approver.role !== GroupMemberRole.MODERATOR && approver.role !== GroupMemberRole.ADMIN)) {
+            throw new ForbiddenException('Only moderators and admins can approve members');
+        }
 
-        const member = await this.groupMemberModel.findByIdAndUpdate(
-            memberId,
-            { status: 'ACTIVE', joined_at: new Date() },
-            { new: true }
-        );
-        if (!member) throw new Error('Member not found');
+        const member = await this.groupMemberModel
+            .findByIdAndUpdate(
+                memberId,
+                { 
+                    status: GroupMemberStatus.ACTIVE, 
+                    joined_at: new Date() 
+                },
+                { new: true }
+            )
+            .exec();
+            
+        if (!member) {
+            throw new NotFoundException('Member request not found');
+        }
 
-        await this.groupModel.findByIdAndUpdate(groupId, {
-            $inc: { members_count: 1, pending_members: -1 }
-        });
+        await this.groupModel
+            .findByIdAndUpdate(groupId, {
+                $inc: { members_count: 1, pending_members: -1 }
+            })
+            .exec();
 
         return member;
     }
 
+    // Reject member request
+    async rejectMember(groupId: string, rejecterId: string, memberId: string): Promise<void> {
+        const rejecter = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: rejecterId })
+            .exec();
+            
+        if (!rejecter || (rejecter.role !== GroupMemberRole.MODERATOR && rejecter.role !== GroupMemberRole.ADMIN)) {
+            throw new ForbiddenException('Only moderators and admins can reject members');
+        }
+
+        const member = await this.groupMemberModel.findById(memberId).exec();
+        if (!member) {
+            throw new NotFoundException('Member request not found');
+        }
+
+        await this.groupMemberModel.findByIdAndDelete(memberId).exec();
+        await this.groupModel
+            .findByIdAndUpdate(groupId, { $inc: { pending_members: -1 } })
+            .exec();
+    }
+
     // UC5.10: Remove member (mod/admin)
     async removeMember(groupId: string, removerId: string, memberId: string): Promise<void> {
-        const remover = await this.groupMemberModel.findOne({ group_id: groupId, user_id: removerId });
-        if (!remover || (remover.role !== 'MODERATOR' && remover.role !== 'ADMIN')) throw new Error('Unauthorized');
+        const remover = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: removerId })
+            .exec();
+            
+        if (!remover || (remover.role !== GroupMemberRole.MODERATOR && remover.role !== GroupMemberRole.ADMIN)) {
+            throw new ForbiddenException('Only moderators and admins can remove members');
+        }
 
-        const member = await this.groupMemberModel.findById(memberId);
-        if (!member) throw new Error('Member not found');
+        const member = await this.groupMemberModel.findById(memberId).exec();
+        if (!member) {
+            throw new NotFoundException('Member not found');
+        }
 
-        await this.groupMemberModel.findByIdAndDelete(memberId);
-        await this.groupModel.findByIdAndUpdate(groupId, { $inc: { members_count: -1 } });
+        // Prevent removing admin if you're just a moderator
+        if (remover.role === GroupMemberRole.MODERATOR && member.role === GroupMemberRole.ADMIN) {
+            throw new ForbiddenException('Moderators cannot remove admins');
+        }
+
+        await this.groupMemberModel.findByIdAndDelete(memberId).exec();
+        
+        if (member.status === GroupMemberStatus.ACTIVE) {
+            await this.groupModel
+                .findByIdAndUpdate(groupId, { $inc: { members_count: -1 } })
+                .exec();
+        }
     }
 
-    // UC5.11: Get members list (mod/admin)
-    async getMembers(groupId: string, userId: string): Promise<GroupMember[]> {
-        const user = await this.groupMemberModel.findOne({ group_id: groupId, user_id: userId });
-        if (!user || (user.role !== 'MODERATOR' && user.role !== 'ADMIN')) throw new Error('Unauthorized');
+    // UC5.11: Get members list
+    async getMembers(groupId: string, userId: string, status?: string) {
+        const user = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: userId })
+            .exec();
+            
+        if (!user) {
+            throw new ForbiddenException('You are not a member of this group');
+        }
 
-        return this.groupMemberModel.find({ group_id: groupId }).populate('user_id');
+        const query: any = { group_id: groupId };
+        if (status) {
+            query.status = status;
+        } else {
+            query.status = GroupMemberStatus.ACTIVE;
+        }
+
+        return this.groupMemberModel.find(query).exec();
     }
 
-    // UC5.12: Promote to moderator (admin only)
-    async promoteToModerator(groupId: string, adminId: string, memberId: string): Promise<GroupMember> {
-        const admin = await this.groupMemberModel.findOne({ group_id: groupId, user_id: adminId, role: 'ADMIN' });
-        if (!admin) throw new Error('Unauthorized');
+    // UC5.12: Update member role (admin only)
+    async updateMemberRole(groupId: string, adminId: string, memberId: string, newRole: GroupMemberRole): Promise<GroupMember> {
+        const admin = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: adminId, role: GroupMemberRole.ADMIN })
+            .exec();
+            
+        if (!admin) {
+            throw new ForbiddenException('Only admins can change member roles');
+        }
 
-        const promotedMember = await this.groupMemberModel.findByIdAndUpdate(memberId, { role: 'MODERATOR' }, { new: true });
-        if (!promotedMember) throw new Error('Member not found');
-        return promotedMember;
+        if (newRole === GroupMemberRole.ADMIN) {
+            throw new BadRequestException('Use transfer admin endpoint to assign admin role');
+        }
+
+        const updatedMember = await this.groupMemberModel
+            .findByIdAndUpdate(memberId, { role: newRole }, { new: true })
+            .exec();
+            
+        if (!updatedMember) {
+            throw new NotFoundException('Member not found');
+        }
+        
+        return updatedMember;
     }
 
     // UC5.13: Transfer admin (admin only)
     async transferAdmin(groupId: string, currentAdminId: string, newAdminId: string): Promise<void> {
-        const currentAdmin = await this.groupMemberModel.findOne({ group_id: groupId, user_id: currentAdminId, role: 'ADMIN' });
-        if (!currentAdmin) throw new Error('Unauthorized');
+        const currentAdmin = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: currentAdminId, role: GroupMemberRole.ADMIN })
+            .exec();
+            
+        if (!currentAdmin) {
+            throw new ForbiddenException('Only admin can transfer admin role');
+        }
 
-        await this.groupMemberModel.findByIdAndUpdate(currentAdmin._id, { role: 'MODERATOR' });
-        await this.groupMemberModel.findOneAndUpdate(
-            { group_id: groupId, user_id: newAdminId },
-            { role: 'ADMIN' }
-        );
+        const newAdminMember = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: newAdminId, status: GroupMemberStatus.ACTIVE })
+            .exec();
+            
+        if (!newAdminMember) {
+            throw new NotFoundException('New admin must be an active member');
+        }
+
+        // Demote current admin to moderator
+        await this.groupMemberModel
+            .findByIdAndUpdate(currentAdmin._id, { role: GroupMemberRole.MODERATOR })
+            .exec();
+            
+        // Promote new admin
+        await this.groupMemberModel
+            .findByIdAndUpdate(newAdminMember._id, { role: GroupMemberRole.ADMIN })
+            .exec();
     }
 
-    // Group posts
-    async createGroupPost(groupId: string, userId: string, postData: Partial<GroupPost>): Promise<GroupPost> {
-        const member = await this.groupMemberModel.findOne({ group_id: groupId, user_id: userId, status: 'ACTIVE' });
-        if (!member) throw new Error('Not a member');
+    // ============ GROUP POSTS ============
 
-        const group = await this.groupModel.findById(groupId);
-        if (!group) throw new Error('Group not found');
-        const status = group.require_post_approval ? 'PENDING' : 'APPROVED';
+    // Create group post
+    async createGroupPost(groupId: string, userId: string, postData: CreateGroupPostDto): Promise<GroupPost> {
+        const member = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: userId, status: GroupMemberStatus.ACTIVE })
+            .exec();
+            
+        if (!member) {
+            throw new ForbiddenException('Only active members can post');
+        }
+
+        const group = await this.groupModel.findById(groupId).exec();
+        if (!group) {
+            throw new NotFoundException('Group not found');
+        }
+
+        // Moderators and admins don't need approval
+        const needsApproval = group.require_post_approval && member.role === GroupMemberRole.MEMBER;
+        const status = needsApproval ? GroupPostStatus.PENDING : GroupPostStatus.APPROVED;
 
         const post = await this.groupPostModel.create({
             ...postData,
@@ -188,45 +444,153 @@ export class GroupsService {
             status,
         });
 
-        if (status === 'PENDING') {
-            await this.groupModel.findByIdAndUpdate(groupId, { $inc: { pending_posts: 1 } });
+        if (status === GroupPostStatus.PENDING) {
+            await this.groupModel
+                .findByIdAndUpdate(groupId, { $inc: { pending_posts: 1 } })
+                .exec();
         }
 
         return post;
     }
 
+    // Get approved group posts (for regular members)
+    async getGroupPosts(groupId: string): Promise<GroupPost[]> {
+        return this.groupPostModel
+            .find({ group_id: groupId, status: GroupPostStatus.APPROVED })
+            .sort({ created_at: -1 })
+            .exec();
+    }
+
+    // Get all group posts with filter (for moderators/admins)
+    async getAllGroupPosts(groupId: string, userId: string, status?: string): Promise<GroupPost[]> {
+        const user = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: userId })
+            .exec();
+            
+        if (!user || (user.role !== GroupMemberRole.MODERATOR && user.role !== GroupMemberRole.ADMIN)) {
+            throw new ForbiddenException('Only moderators and admins can view all posts');
+        }
+
+        const query: any = { group_id: groupId };
+        if (status) {
+            query.status = status;
+        }
+
+        return this.groupPostModel
+            .find(query)
+            .sort({ created_at: -1 })
+            .exec();
+    }
+
+    // Get pending posts
+    async getPendingPosts(groupId: string, userId: string): Promise<GroupPost[]> {
+        const user = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: userId })
+            .exec();
+            
+        if (!user || (user.role !== GroupMemberRole.MODERATOR && user.role !== GroupMemberRole.ADMIN)) {
+            throw new ForbiddenException('Only moderators and admins can view pending posts');
+        }
+
+        return this.groupPostModel
+            .find({ group_id: groupId, status: GroupPostStatus.PENDING })
+            .sort({ created_at: -1 })
+            .exec();
+    }
+
     // UC5.6: Approve post (mod/admin)
     async approvePost(groupId: string, approverId: string, postId: string): Promise<GroupPost> {
-        const approver = await this.groupMemberModel.findOne({ group_id: groupId, user_id: approverId });
-        if (!approver || (approver.role !== 'MODERATOR' && approver.role !== 'ADMIN')) throw new Error('Unauthorized');
+        const approver = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: approverId })
+            .exec();
+            
+        if (!approver || (approver.role !== GroupMemberRole.MODERATOR && approver.role !== GroupMemberRole.ADMIN)) {
+            throw new ForbiddenException('Only moderators and admins can approve posts');
+        }
 
-        const post = await this.groupPostModel.findByIdAndUpdate(
-            postId,
-            { status: 'APPROVED', approved_by: approverId, approved_at: new Date() },
-            { new: true }
-        );
-        if (!post) throw new Error('Post not found');
+        const post = await this.groupPostModel
+            .findByIdAndUpdate(
+                postId,
+                { 
+                    status: GroupPostStatus.APPROVED, 
+                    approved_by: approverId, 
+                    approved_at: new Date() 
+                },
+                { new: true }
+            )
+            .exec();
+            
+        if (!post) {
+            throw new NotFoundException('Post not found');
+        }
 
-        await this.groupModel.findByIdAndUpdate(groupId, { $inc: { pending_posts: -1 } });
+        await this.groupModel
+            .findByIdAndUpdate(groupId, { $inc: { pending_posts: -1 } })
+            .exec();
+            
         return post;
     }
 
+    // Reject post
+    async rejectPost(groupId: string, rejecterId: string, postId: string, reason?: string): Promise<void> {
+        const rejecter = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: rejecterId })
+            .exec();
+            
+        if (!rejecter || (rejecter.role !== GroupMemberRole.MODERATOR && rejecter.role !== GroupMemberRole.ADMIN)) {
+            throw new ForbiddenException('Only moderators and admins can reject posts');
+        }
+
+        const post = await this.groupPostModel
+            .findByIdAndUpdate(
+                postId,
+                { 
+                    status: GroupPostStatus.REJECTED, 
+                    rejected_reason: reason,
+                },
+                { new: true }
+            )
+            .exec();
+            
+        if (!post) {
+            throw new NotFoundException('Post not found');
+        }
+
+        await this.groupModel
+            .findByIdAndUpdate(groupId, { $inc: { pending_posts: -1 } })
+            .exec();
+    }
+
+    // UC5.7: Delete post (mod/admin or post owner)
     async deletePost(groupId: string, deleterId: string, postId: string): Promise<void> {
-        const deleter = await this.groupMemberModel.findOne({ group_id: groupId, user_id: deleterId });
-        if (!deleter || (deleter.role !== 'MODERATOR' && deleter.role !== 'ADMIN')) throw new Error('Unauthorized');
+        const deleter = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: deleterId })
+            .exec();
+            
+        if (!deleter) {
+            throw new ForbiddenException('You are not a member of this group');
+        }
 
-        await this.groupPostModel.findByIdAndDelete(postId);
-    }
+        const post = await this.groupPostModel.findById(postId).exec();
+        if (!post) {
+            throw new NotFoundException('Post not found');
+        }
 
-    async getGroupPosts(groupId: string): Promise<GroupPost[]> {
-        return this.groupPostModel.find({ group_id: groupId, status: 'APPROVED' }).populate('user_id');
-    }
+        // Allow post owner or moderator/admin to delete
+        const canDelete = post.user_id === deleterId || 
+                          deleter.role === GroupMemberRole.MODERATOR || 
+                          deleter.role === GroupMemberRole.ADMIN;
 
-    // UC5.12: Get posts list (mod/admin)
-    async getPosts(groupId: string, userId: string): Promise<GroupPost[]> {
-        const user = await this.groupMemberModel.findOne({ group_id: groupId, user_id: userId });
-        if (!user || (user.role !== 'MODERATOR' && user.role !== 'ADMIN')) throw new Error('Unauthorized');
+        if (!canDelete) {
+            throw new ForbiddenException('You do not have permission to delete this post');
+        }
 
-        return this.groupPostModel.find({ group_id: groupId }).populate('user_id');
+        await this.groupPostModel.findByIdAndDelete(postId).exec();
+
+        if (post.status === GroupPostStatus.PENDING) {
+            await this.groupModel
+                .findByIdAndUpdate(groupId, { $inc: { pending_posts: -1 } })
+                .exec();
+        }
     }
 }
