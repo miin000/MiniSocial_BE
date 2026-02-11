@@ -36,7 +36,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     // ✅ request.user thống nhất keys
     return {
-      user_id: user._id,
+      userId: user._id.toString(), // ← Sửa từ user_id thành userId để khớp với controller
+      user_id: user._id, // ← Giữ lại để backward compatible
       email: user.email,
       username: user.username,
       roles_admin: user.roles_admin,
