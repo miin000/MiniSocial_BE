@@ -87,8 +87,11 @@ export class GroupsService {
 
         // Fetch user info for each member
         const memberUserIds = membersRaw.map(m => m.user_id);
+        const memberUserObjectIds = memberUserIds
+            .filter(id => Types.ObjectId.isValid(id))
+            .map(id => new Types.ObjectId(id));
         const users = await this.userModel
-            .find({ _id: { $in: memberUserIds } })
+            .find({ _id: { $in: memberUserObjectIds } })
             .select('_id username full_name avatar_url')
             .exec();
         const userMap: Record<string, any> = {};
