@@ -1,7 +1,7 @@
 ﻿
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Group } from './schemas/group.scheme';
 import { GroupMember, GroupMemberRole, GroupMemberStatus } from './schemas/group-member.scheme';
 import { GroupPost, GroupPostStatus } from './schemas/group-post.scheme';
@@ -35,10 +35,14 @@ export class GroupsService {
             .select('group_id role')
             .exec();
 
+        // Convert string group_id to ObjectId for correct $in query
         const userGroupIds = userMemberships.map(m => m.group_id);
+        const userGroupObjectIds = userGroupIds
+            .filter(id => Types.ObjectId.isValid(id))
+            .map(id => new Types.ObjectId(id));
 
         const myGroups = await this.groupModel
-            .find({ _id: { $in: userGroupIds }, status: 'active' })
+            .find({ _id: { $in: userGroupObjectIds }, status: 'active' })
             .exec();
 
         // Attach role to each group
@@ -53,7 +57,7 @@ export class GroupsService {
         // Get suggested groups (groups user is not part of)
         const suggestedGroups = await this.groupModel
             .find({ 
-                _id: { $nin: userGroupIds }, 
+                _id: { $nin: userGroupObjectIds }, 
                 status: 'active' 
             })
             .limit(10)
