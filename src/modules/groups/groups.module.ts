@@ -7,6 +7,7 @@ import { Group, GroupSchema } from './schemas/group.scheme';
 import { GroupMember, GroupMemberSchema } from './schemas/group-member.scheme';
 import { GroupPost, GroupPostSchema } from './schemas/group-post.scheme';
 import { GroupRolesGuard } from './guards/group-roles.guard';
+import { User, UserSchema } from '../users/schemas/user.scheme';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { GroupRolesGuard } from './guards/group-roles.guard';
       { name: Group.name, schema: GroupSchema },
       { name: GroupMember.name, schema: GroupMemberSchema },
       { name: GroupPost.name, schema: GroupPostSchema },
+      { name: User.name, schema: UserSchema },
     ])
   ],
   controllers: [GroupsController],

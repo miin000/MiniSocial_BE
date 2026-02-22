@@ -5,6 +5,7 @@ import { Model } from 'mongoose';
 import { Group } from './schemas/group.scheme';
 import { GroupMember, GroupMemberRole, GroupMemberStatus } from './schemas/group-member.scheme';
 import { GroupPost, GroupPostStatus } from './schemas/group-post.scheme';
+import { User } from '../users/schemas/user.scheme';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupPostDto } from './dto/create-group-post.dto';
@@ -15,6 +16,7 @@ export class GroupsService {
         @InjectModel(Group.name) private groupModel: Model<Group>,
         @InjectModel(GroupMember.name) private groupMemberModel: Model<GroupMember>,
         @InjectModel(GroupPost.name) private groupPostModel: Model<GroupPost>,
+        @InjectModel(User.name) private userModel: Model<User>,
     ) { }
 
     async findGroupById(id: string): Promise<Group | null> {
@@ -71,13 +73,43 @@ export class GroupsService {
         }
 
         const membership = await this.groupMemberModel
-            .findOne({ group_id: groupId, user_id: userId })
+            .findOne({ group_id: groupId, user_id: userId, status: GroupMemberStatus.ACTIVE })
             .exec();
 
+        // Fetch all active members
+        const membersRaw = await this.groupMemberModel
+            .find({ group_id: groupId, status: GroupMemberStatus.ACTIVE })
+            .exec();
+
+        // Fetch user info for each member
+        const memberUserIds = membersRaw.map(m => m.user_id);
+        const users = await this.userModel
+            .find({ _id: { $in: memberUserIds } })
+            .select('_id username full_name avatar_url')
+            .exec();
+        const userMap: Record<string, any> = {};
+        users.forEach(u => { userMap[u._id.toString()] = u; });
+
+        const members = membersRaw.map(m => {
+            const u = userMap[m.user_id];
+            return {
+                userId: m.user_id,
+                role: m.role,
+                status: m.status,
+                joinedAt: m.joined_at,
+                user: u ? {
+                    _id: u._id,
+                    username: u.username,
+                    fullName: u.full_name,
+                    avatarUrl: u.avatar_url,
+                } : null,
+            };
+        });
+
         return {
-            ...group.toObject(),
-            userRole: membership?.role,
-            userStatus: membership?.status,
+            group: group.toObject(),
+            members,
+            userRole: membership?.role ?? null,
             isMember: !!membership,
         };
     }
