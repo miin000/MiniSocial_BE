@@ -236,7 +236,7 @@ export class GroupsController {
         return await this.groupsService.getAllGroupPosts(id, req.user.userId, status);
       }
       // Regular members see only approved posts
-      return await this.groupsService.getGroupPosts(id);
+      return await this.groupsService.getGroupPosts(id, req.user.userId);
     } catch (error) {
       throw new HttpException(error.message || 'Failed to get posts', HttpStatus.BAD_REQUEST);
     }

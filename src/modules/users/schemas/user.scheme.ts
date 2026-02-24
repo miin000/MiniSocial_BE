@@ -14,6 +14,7 @@ export enum UserRoleAdmin {
   ADMIN = 'ADMIN',
   MODERATOR = 'MODERATOR',
   VIEWER = 'VIEWER',
+  NONE = 'NONE',
 }
 
 export enum UserStatus {

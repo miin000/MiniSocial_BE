@@ -6,6 +6,7 @@ import { Group } from './schemas/group.scheme';
 import { GroupMember, GroupMemberRole, GroupMemberStatus } from './schemas/group-member.scheme';
 import { GroupPost, GroupPostStatus } from './schemas/group-post.scheme';
 import { User } from '../users/schemas/user.scheme';
+import { Like } from '../likes/schemas/like.scheme';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupPostDto } from './dto/create-group-post.dto';
@@ -17,6 +18,7 @@ export class GroupsService {
         @InjectModel(GroupMember.name) private groupMemberModel: Model<GroupMember>,
         @InjectModel(GroupPost.name) private groupPostModel: Model<GroupPost>,
         @InjectModel(User.name) private userModel: Model<User>,
+        @InjectModel(Like.name) private likeModel: Model<Like>,
     ) { }
 
     async findGroupById(id: string): Promise<Group | null> {
@@ -533,15 +535,17 @@ export class GroupsService {
     }
 
     // Get approved group posts (for regular members)
-    async getGroupPosts(groupId: string): Promise<GroupPost[]> {
-        return this.groupPostModel
+    async getGroupPosts(groupId: string, userId?: string): Promise<any[]> {
+        const posts = await this.groupPostModel
             .find({ group_id: groupId, status: GroupPostStatus.APPROVED })
             .sort({ created_at: -1 })
+            .lean()
             .exec();
+        return this.enrichGroupPostsWithUserInfo(posts, userId);
     }
 
     // Get all group posts with filter (for moderators/admins)
-    async getAllGroupPosts(groupId: string, userId: string, status?: string): Promise<GroupPost[]> {
+    async getAllGroupPosts(groupId: string, userId: string, status?: string): Promise<any[]> {
         const user = await this.groupMemberModel
             .findOne({ group_id: groupId, user_id: userId })
             .exec();
@@ -555,10 +559,47 @@ export class GroupsService {
             query.status = status;
         }
 
-        return this.groupPostModel
+        const posts = await this.groupPostModel
             .find(query)
             .sort({ created_at: -1 })
+            .lean()
             .exec();
+        return this.enrichGroupPostsWithUserInfo(posts, userId);
+    }
+
+    private async enrichGroupPostsWithUserInfo(posts: any[], currentUserId?: string): Promise<any[]> {
+        if (!posts || posts.length === 0) return [];
+
+        const userIds = [...new Set(posts.map(p => p.user_id))];
+        const users = await this.userModel
+            .find({ _id: { $in: userIds } })
+            .select('_id full_name username avatar_url')
+            .lean()
+            .exec();
+        const userMap = new Map(users.map(u => [(u as any)._id.toString(), u]));
+
+        let likedPostIds = new Set<string>();
+        if (currentUserId) {
+            const likes = await this.likeModel
+                .find({
+                    user_id: currentUserId,
+                    post_id: { $in: posts.map(p => p._id.toString()) },
+                })
+                .lean()
+                .exec();
+            likedPostIds = new Set(likes.map((l: any) => l.post_id?.toString()));
+        }
+
+        return posts.map(post => {
+            const user = userMap.get(post.user_id?.toString());
+            return {
+                ...post,
+                user_name: (user as any)?.full_name || (user as any)?.username || 'Người dùng',
+                username: (user as any)?.username || null,
+                user_avatar: (user as any)?.avatar_url || null,
+                is_liked: likedPostIds.has(post._id.toString()),
+            };
+        });
     }
 
     // Get pending posts
