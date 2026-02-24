@@ -33,6 +33,9 @@ export class Group {
     @Prop({ default: false })
     require_post_approval: boolean;
 
+    @Prop({ default: true })
+    require_member_approval: boolean;
+
     @Prop({ type: String, enum: ['active', 'blocked'], default: 'active' })
     status: 'active' | 'blocked';
 

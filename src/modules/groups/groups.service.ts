@@ -204,17 +204,27 @@ export class GroupsService {
             throw new BadRequestException('Already a member');
         }
 
-        // Always PENDING - requires moderator approval
+        // Check require_member_approval - if disabled, auto-approve
+        const requireApproval = group.require_member_approval !== false; // default true
+        const memberStatus = requireApproval ? GroupMemberStatus.PENDING : GroupMemberStatus.ACTIVE;
+
         const member = await this.groupMemberModel.create({
             group_id: groupId,
             user_id: userId,
             role: GroupMemberRole.MEMBER,
-            status: GroupMemberStatus.PENDING,
+            status: memberStatus,
+            joined_at: !requireApproval ? new Date() : undefined,
         });
 
-        await this.groupModel
-            .findByIdAndUpdate(groupId, { $inc: { pending_members: 1 } })
-            .exec();
+        if (requireApproval) {
+            await this.groupModel
+                .findByIdAndUpdate(groupId, { $inc: { pending_members: 1 } })
+                .exec();
+        } else {
+            await this.groupModel
+                .findByIdAndUpdate(groupId, { $inc: { members_count: 1 } })
+                .exec();
+        }
 
         return member;
     }
@@ -292,9 +302,39 @@ export class GroupsService {
             throw new ForbiddenException('Only moderators and admins can view pending members');
         }
 
-        return this.groupMemberModel
+        const pendingMembers = await this.groupMemberModel
             .find({ group_id: groupId, status: GroupMemberStatus.PENDING })
             .exec();
+
+        // Enrich with user info
+        const userIds = pendingMembers.map(m => m.user_id)
+            .filter(id => Types.ObjectId.isValid(id))
+            .map(id => new Types.ObjectId(id));
+
+        const users = await this.userModel
+            .find({ _id: { $in: userIds } })
+            .select('_id username full_name avatar_url')
+            .exec();
+
+        const userMap: Record<string, any> = {};
+        users.forEach(u => { userMap[u._id.toString()] = u; });
+
+        return pendingMembers.map(m => {
+            const u = userMap[m.user_id];
+            return {
+                _id: m._id,
+                userId: m.user_id,
+                role: m.role,
+                status: m.status,
+                createdAt: m.created_at,
+                user: u ? {
+                    _id: u._id,
+                    username: u.username,
+                    fullName: u.full_name,
+                    avatarUrl: u.avatar_url,
+                } : null,
+            };
+        });
     }
 
     // UC5.9: Approve member (mod/admin)

@@ -22,4 +22,8 @@ export class UpdateGroupDto {
   @IsOptional()
   @IsBoolean()
   require_post_approval?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  require_member_approval?: boolean;
 }
