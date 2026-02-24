@@ -55,7 +55,7 @@ export class User {
   @Prop({ type: [String], enum: UserRoleGroup, default: [UserRoleGroup.MEMBER] })
   roles_group: UserRoleGroup[];
 
-  @Prop({ type: [String], enum: UserRoleAdmin, default: [UserRoleAdmin.VIEWER] })
+  @Prop({ type: [String], enum: UserRoleAdmin, default: [UserRoleAdmin.NONE] })
   roles_admin: UserRoleAdmin[];
   
   @Prop({ type: String, enum: UserStatus, default: UserStatus.ACTIVE })
