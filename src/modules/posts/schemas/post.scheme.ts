@@ -4,6 +4,20 @@ import { HydratedDocument } from 'mongoose';
 
 export type PostDocument = HydratedDocument<Post>;
 
+export enum PostVisibility {
+    PUBLIC = 'public',
+    FRIENDS = 'friends',
+    PRIVATE = 'private',
+}
+
+export enum PostStatus {
+    ACTIVE = 'active',
+    PENDING = 'pending',
+    APPROVED = 'approved',
+    REJECTED = 'rejected',
+    DELETED = 'deleted',
+}
+
 @Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Post {
     @Prop()
@@ -18,7 +32,13 @@ export class Post {
     @Prop()
     content_type: string;
 
-    @Prop({ default: 'active' })
+    @Prop({ type: String, enum: PostVisibility, default: PostVisibility.PUBLIC })
+    visibility: PostVisibility;
+
+    @Prop({ default: null })
+    group_id: string;
+
+    @Prop({ type: String, enum: PostStatus, default: PostStatus.ACTIVE })
     status: string;
 
     @Prop()
@@ -26,6 +46,9 @@ export class Post {
 
     @Prop()
     approved_at: Date;
+
+    @Prop()
+    rejected_reason: string;
 
     @Prop({ default: 0 })
     likes_count: number;

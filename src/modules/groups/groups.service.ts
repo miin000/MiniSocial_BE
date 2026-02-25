@@ -4,7 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Group } from './schemas/group.scheme';
 import { GroupMember, GroupMemberRole, GroupMemberStatus } from './schemas/group-member.scheme';
-import { GroupPost, GroupPostStatus } from './schemas/group-post.scheme';
+import { Post, PostStatus } from '../posts/schemas/post.scheme';
 import { User } from '../users/schemas/user.scheme';
 import { Like } from '../likes/schemas/like.scheme';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -16,7 +16,7 @@ export class GroupsService {
     constructor(
         @InjectModel(Group.name) private groupModel: Model<Group>,
         @InjectModel(GroupMember.name) private groupMemberModel: Model<GroupMember>,
-        @InjectModel(GroupPost.name) private groupPostModel: Model<GroupPost>,
+        @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(Like.name) private likeModel: Model<Like>,
     ) { }
@@ -46,6 +46,26 @@ export class GroupsService {
         const myGroups = await this.groupModel
             .find({ _id: { $in: userGroupObjectIds }, status: 'active' })
             .exec();
+
+        // Sync members_count with actual active member count for each group
+        const myGroupObjectIds = myGroups.map(g => g._id.toString());
+        const actualCounts = await this.groupMemberModel.aggregate([
+            { $match: { group_id: { $in: myGroupObjectIds }, status: GroupMemberStatus.ACTIVE } },
+            { $lookup: { from: 'users', localField: 'user_id', foreignField: '_id', as: 'userDoc' } },
+            { $match: { 'userDoc': { $ne: [] } } },
+            { $group: { _id: '$group_id', count: { $sum: 1 } } },
+        ]).exec();
+        const countMap: Record<string, number> = {};
+        actualCounts.forEach((c: any) => { countMap[c._id] = c.count; });
+
+        // Update any group whose cached members_count is out of sync
+        for (const group of myGroups) {
+            const actualCount = countMap[group._id.toString()] ?? 0;
+            if (group.members_count !== actualCount) {
+                await this.groupModel.findByIdAndUpdate(group._id, { members_count: actualCount }).exec();
+                group.members_count = actualCount;
+            }
+        }
 
         // Attach role to each group
         const myGroupsWithRoles = myGroups.map(group => {
@@ -99,25 +119,48 @@ export class GroupsService {
         const userMap: Record<string, any> = {};
         users.forEach(u => { userMap[u._id.toString()] = u; });
 
-        const members = membersRaw.map(m => {
+        // Filter out stale members whose users no longer exist in DB
+        const validMembers: any[] = [];
+        const staleMemberIds: any[] = [];
+        for (const m of membersRaw) {
             const u = userMap[m.user_id];
-            return {
-                userId: m.user_id,
-                role: m.role,
-                status: m.status,
-                joinedAt: m.joined_at,
-                user: u ? {
-                    _id: u._id,
-                    username: u.username,
-                    fullName: u.full_name,
-                    avatarUrl: u.avatar_url,
-                } : null,
-            };
-        });
+            if (u) {
+                validMembers.push({
+                    userId: m.user_id,
+                    role: m.role,
+                    status: m.status,
+                    joinedAt: m.joined_at,
+                    user: {
+                        _id: u._id,
+                        username: u.username,
+                        fullName: u.full_name,
+                        avatarUrl: u.avatar_url,
+                    },
+                });
+            } else {
+                // User was deleted from DB — mark for cleanup
+                staleMemberIds.push(m._id);
+            }
+        }
+
+        // Clean up stale GroupMember records and sync members_count
+        if (staleMemberIds.length > 0) {
+            await this.groupMemberModel.deleteMany({ _id: { $in: staleMemberIds } }).exec();
+            await this.groupModel.findByIdAndUpdate(groupId, {
+                members_count: validMembers.length,
+            }).exec();
+            group.members_count = validMembers.length;
+        } else if (group.members_count !== validMembers.length) {
+            // Sync cached counter if it drifted
+            await this.groupModel.findByIdAndUpdate(groupId, {
+                members_count: validMembers.length,
+            }).exec();
+            group.members_count = validMembers.length;
+        }
 
         return {
             group: group.toObject(),
-            members,
+            members: validMembers,
             userRole: membership?.role ?? null,
             isMember: !!membership,
         };
@@ -185,7 +228,7 @@ export class GroupsService {
 
         await this.groupModel.findByIdAndDelete(groupId).exec();
         await this.groupMemberModel.deleteMany({ group_id: groupId }).exec();
-        await this.groupPostModel.deleteMany({ group_id: groupId }).exec();
+        await this.postModel.deleteMany({ group_id: groupId }).exec();
     }
 
     // UC5.1: Join group (request to join)
@@ -497,10 +540,10 @@ export class GroupsService {
             .exec();
     }
 
-    // ============ GROUP POSTS ============
+    // ============ GROUP POSTS (using unified Post model) ============
 
     // Create group post
-    async createGroupPost(groupId: string, userId: string, postData: CreateGroupPostDto): Promise<GroupPost> {
+    async createGroupPost(groupId: string, userId: string, postData: CreateGroupPostDto): Promise<Post> {
         const member = await this.groupMemberModel
             .findOne({ group_id: groupId, user_id: userId, status: GroupMemberStatus.ACTIVE })
             .exec();
@@ -516,16 +559,20 @@ export class GroupsService {
 
         // Moderators and admins don't need approval
         const needsApproval = group.require_post_approval && member.role === GroupMemberRole.MEMBER;
-        const status = needsApproval ? GroupPostStatus.PENDING : GroupPostStatus.APPROVED;
+        const status = needsApproval ? PostStatus.PENDING : PostStatus.APPROVED;
 
-        const post = await this.groupPostModel.create({
+        const post = await this.postModel.create({
             ...postData,
             group_id: groupId,
             user_id: userId,
+            visibility: 'public',
             status,
+            likes_count: 0,
+            comments_count: 0,
+            shares_count: 0,
         });
 
-        if (status === GroupPostStatus.PENDING) {
+        if (status === PostStatus.PENDING) {
             await this.groupModel
                 .findByIdAndUpdate(groupId, { $inc: { pending_posts: 1 } })
                 .exec();
@@ -536,8 +583,8 @@ export class GroupsService {
 
     // Get approved group posts (for regular members)
     async getGroupPosts(groupId: string, userId?: string): Promise<any[]> {
-        const posts = await this.groupPostModel
-            .find({ group_id: groupId, status: GroupPostStatus.APPROVED })
+        const posts = await this.postModel
+            .find({ group_id: groupId, status: { $in: [PostStatus.APPROVED, PostStatus.ACTIVE] } })
             .sort({ created_at: -1 })
             .lean()
             .exec();
@@ -559,7 +606,7 @@ export class GroupsService {
             query.status = status;
         }
 
-        const posts = await this.groupPostModel
+        const posts = await this.postModel
             .find(query)
             .sort({ created_at: -1 })
             .lean()
@@ -603,7 +650,7 @@ export class GroupsService {
     }
 
     // Get pending posts
-    async getPendingPosts(groupId: string, userId: string): Promise<GroupPost[]> {
+    async getPendingPosts(groupId: string, userId: string): Promise<Post[]> {
         const user = await this.groupMemberModel
             .findOne({ group_id: groupId, user_id: userId })
             .exec();
@@ -612,14 +659,14 @@ export class GroupsService {
             throw new ForbiddenException('Only moderators and admins can view pending posts');
         }
 
-        return this.groupPostModel
-            .find({ group_id: groupId, status: GroupPostStatus.PENDING })
+        return this.postModel
+            .find({ group_id: groupId, status: PostStatus.PENDING })
             .sort({ created_at: -1 })
             .exec();
     }
 
     // UC5.6: Approve post (mod/admin)
-    async approvePost(groupId: string, approverId: string, postId: string): Promise<GroupPost> {
+    async approvePost(groupId: string, approverId: string, postId: string): Promise<Post> {
         const approver = await this.groupMemberModel
             .findOne({ group_id: groupId, user_id: approverId })
             .exec();
@@ -628,11 +675,11 @@ export class GroupsService {
             throw new ForbiddenException('Only moderators and admins can approve posts');
         }
 
-        const post = await this.groupPostModel
+        const post = await this.postModel
             .findByIdAndUpdate(
                 postId,
                 { 
-                    status: GroupPostStatus.APPROVED, 
+                    status: PostStatus.APPROVED, 
                     approved_by: approverId, 
                     approved_at: new Date() 
                 },
@@ -661,11 +708,11 @@ export class GroupsService {
             throw new ForbiddenException('Only moderators and admins can reject posts');
         }
 
-        const post = await this.groupPostModel
+        const post = await this.postModel
             .findByIdAndUpdate(
                 postId,
                 { 
-                    status: GroupPostStatus.REJECTED, 
+                    status: PostStatus.REJECTED, 
                     rejected_reason: reason,
                 },
                 { new: true }
@@ -691,7 +738,7 @@ export class GroupsService {
             throw new ForbiddenException('You are not a member of this group');
         }
 
-        const post = await this.groupPostModel.findById(postId).exec();
+        const post = await this.postModel.findById(postId).exec();
         if (!post) {
             throw new NotFoundException('Post not found');
         }
@@ -705,9 +752,9 @@ export class GroupsService {
             throw new ForbiddenException('You do not have permission to delete this post');
         }
 
-        await this.groupPostModel.findByIdAndDelete(postId).exec();
+        await this.postModel.findByIdAndDelete(postId).exec();
 
-        if (post.status === GroupPostStatus.PENDING) {
+        if (post.status === PostStatus.PENDING) {
             await this.groupModel
                 .findByIdAndUpdate(groupId, { $inc: { pending_posts: -1 } })
                 .exec();

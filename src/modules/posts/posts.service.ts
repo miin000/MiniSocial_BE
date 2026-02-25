@@ -1,7 +1,7 @@
-﻿import { Injectable, NotFoundException } from '@nestjs/common';
+﻿import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Post } from './schemas/post.scheme';
+import { Post, PostVisibility, PostStatus } from './schemas/post.scheme';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 
@@ -11,12 +11,16 @@ export class PostsService {
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel('User') private userModel: Model<any>,
         @InjectModel('Like') private likeModel: Model<any>,
+        @InjectModel('Friend') private friendModel: Model<any>,
     ) { }
 
     async create(createPostDto: CreatePostDto): Promise<Post> {
+        const isGroupPost = !!createPostDto.group_id;
         const createdPost = new this.postModel({
             ...createPostDto,
-            status: 'active',
+            visibility: createPostDto.visibility || PostVisibility.PUBLIC,
+            // Group posts that need approval start as 'pending'; others start as 'active'
+            status: isGroupPost ? PostStatus.PENDING : PostStatus.ACTIVE,
             likes_count: 0,
             comments_count: 0,
             shares_count: 0,
@@ -24,20 +28,53 @@ export class PostsService {
         return createdPost.save();
     }
 
+    // Create group post with auto-approve logic
+    async createGroupPost(createPostDto: CreatePostDto, autoApprove: boolean): Promise<Post> {
+        const createdPost = new this.postModel({
+            ...createPostDto,
+            visibility: PostVisibility.PUBLIC, // Group posts are visible to group members
+            status: autoApprove ? PostStatus.APPROVED : PostStatus.PENDING,
+            likes_count: 0,
+            comments_count: 0,
+            shares_count: 0,
+        });
+        return createdPost.save();
+    }
+
+    // Main feed: only non-group posts that are active + respect visibility
     async findAll(page: number = 1, limit: number = 20, currentUserId?: string): Promise<{ posts: any[], total: number }> {
         const skip = (page - 1) * limit;
+        
+        // Build query: non-group posts, active status
+        const query: any = {
+            group_id: { $in: [null, undefined, ''] },
+            status: PostStatus.ACTIVE,
+        };
+
+        // Handle visibility filtering
+        if (currentUserId) {
+            // Get friend IDs for 'friends' visibility posts
+            const friendIds = await this.getFriendIds(currentUserId);
+            query.$or = [
+                { visibility: PostVisibility.PUBLIC },
+                { visibility: PostVisibility.FRIENDS, user_id: { $in: [currentUserId, ...friendIds] } },
+                { visibility: PostVisibility.PRIVATE, user_id: currentUserId },
+            ];
+        } else {
+            query.visibility = PostVisibility.PUBLIC;
+        }
+
         const [posts, total] = await Promise.all([
             this.postModel
-                .find({ status: 'active' })
+                .find(query)
                 .sort({ created_at: -1 })
                 .skip(skip)
                 .limit(limit)
                 .lean()
                 .exec(),
-            this.postModel.countDocuments({ status: 'active' })
+            this.postModel.countDocuments(query)
         ]);
 
-        // Enrich with user info and like status
         const enrichedPosts = await this.enrichPostsWithUserInfo(posts, currentUserId);
         return { posts: enrichedPosts, total };
     }
@@ -54,19 +91,127 @@ export class PostsService {
 
     async findByUserId(userId: string, page: number = 1, limit: number = 20, currentUserId?: string): Promise<{ posts: any[], total: number }> {
         const skip = (page - 1) * limit;
+        
+        // Build visibility-aware query for profile posts
+        const query: any = {
+            user_id: userId,
+            group_id: { $in: [null, undefined, ''] },
+            status: PostStatus.ACTIVE,
+        };
+
+        if (currentUserId && currentUserId !== userId) {
+            const friendIds = await this.getFriendIds(currentUserId);
+            const isFriend = friendIds.includes(userId);
+            if (isFriend) {
+                query.visibility = { $in: [PostVisibility.PUBLIC, PostVisibility.FRIENDS] };
+            } else {
+                query.visibility = PostVisibility.PUBLIC;
+            }
+        }
+        // If viewing own profile or no currentUserId specified, show all
+
         const [posts, total] = await Promise.all([
             this.postModel
-                .find({ user_id: userId, status: 'active' })
+                .find(query)
                 .sort({ created_at: -1 })
                 .skip(skip)
                 .limit(limit)
                 .lean()
                 .exec(),
-            this.postModel.countDocuments({ user_id: userId, status: 'active' })
+            this.postModel.countDocuments(query)
         ]);
 
         const enrichedPosts = await this.enrichPostsWithUserInfo(posts, currentUserId);
         return { posts: enrichedPosts, total };
+    }
+
+    // Get group posts (approved only)
+    async findByGroupId(groupId: string, page: number = 1, limit: number = 20, currentUserId?: string): Promise<{ posts: any[], total: number }> {
+        const skip = (page - 1) * limit;
+        const query = {
+            group_id: groupId,
+            status: { $in: [PostStatus.ACTIVE, PostStatus.APPROVED] },
+        };
+
+        const [posts, total] = await Promise.all([
+            this.postModel
+                .find(query)
+                .sort({ created_at: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean()
+                .exec(),
+            this.postModel.countDocuments(query)
+        ]);
+
+        const enrichedPosts = await this.enrichPostsWithUserInfo(posts, currentUserId);
+        return { posts: enrichedPosts, total };
+    }
+
+    // Get all group posts with optional status filter (for moderators/admins)
+    async findAllByGroupId(groupId: string, status?: string, currentUserId?: string): Promise<any[]> {
+        const query: any = { group_id: groupId };
+        if (status) {
+            query.status = status;
+        }
+
+        const posts = await this.postModel
+            .find(query)
+            .sort({ created_at: -1 })
+            .lean()
+            .exec();
+
+        return this.enrichPostsWithUserInfo(posts, currentUserId);
+    }
+
+    // Get pending group posts
+    async findPendingByGroupId(groupId: string, currentUserId?: string): Promise<any[]> {
+        const posts = await this.postModel
+            .find({ group_id: groupId, status: PostStatus.PENDING })
+            .sort({ created_at: -1 })
+            .lean()
+            .exec();
+
+        return this.enrichPostsWithUserInfo(posts, currentUserId);
+    }
+
+    // Approve a group post
+    async approveGroupPost(postId: string, approverId: string): Promise<Post> {
+        const post = await this.postModel
+            .findByIdAndUpdate(
+                postId,
+                {
+                    status: PostStatus.APPROVED,
+                    approved_by: approverId,
+                    approved_at: new Date(),
+                },
+                { new: true }
+            )
+            .exec();
+
+        if (!post) {
+            throw new NotFoundException('Post not found');
+        }
+        return post;
+    }
+
+    // Reject a group post
+    async rejectGroupPost(postId: string, reason?: string): Promise<Post> {
+        const post = await this.postModel
+            .findByIdAndUpdate(
+                postId,
+                {
+                    status: PostStatus.REJECTED,
+                    rejected_reason: reason,
+                },
+                { new: true }
+            )
+            .exec();
+
+        if (!post) {
+            throw new NotFoundException('Post not found');
+        }
+        return post;
     }
 
     async update(id: string, updatePostDto: UpdatePostDto): Promise<Post> {
@@ -101,22 +246,46 @@ export class PostsService {
             .exec();
     }
 
+    // Delete all posts belonging to a group
+    async deleteByGroupId(groupId: string): Promise<void> {
+        await this.postModel.deleteMany({ group_id: groupId }).exec();
+    }
+
+    // Count pending posts for a group
+    async countPendingByGroupId(groupId: string): Promise<number> {
+        return this.postModel.countDocuments({ group_id: groupId, status: PostStatus.PENDING }).exec();
+    }
+
+    private async getFriendIds(userId: string): Promise<string[]> {
+        try {
+            const friends = await this.friendModel.find({
+                $or: [
+                    { user_id_1: userId, status: 'accepted' },
+                    { user_id_2: userId, status: 'accepted' },
+                ],
+            }).lean().exec();
+
+            return friends.map((f: any) => {
+                return f.user_id_1 === userId ? f.user_id_2 : f.user_id_1;
+            });
+        } catch {
+            return [];
+        }
+    }
+
     private async enrichPostsWithUserInfo(posts: any[], currentUserId?: string): Promise<any[]> {
         if (!posts || posts.length === 0) return [];
 
-        // Get unique user IDs
         const userIds = [...new Set(posts.map(post => post.user_id))];
         
-        // Fetch all users at once
         const users = await this.userModel
             .find({ _id: { $in: userIds } })
-            .select('_id full_name avatar_url')
+            .select('_id full_name username avatar_url')
             .lean()
             .exec();
 
         const userMap = new Map(users.map(user => [(user as any)._id.toString(), user]));
 
-        // If currentUserId is provided, check which posts the user has liked
         let likedPostIds = new Set();
         if (currentUserId) {
             const likes = await this.likeModel
@@ -129,13 +298,13 @@ export class PostsService {
             likedPostIds = new Set(likes.map(like => like.post_id));
         }
 
-        // Enrich posts with user info and like status
         return posts.map(post => {
             const user = userMap.get(post.user_id);
             return {
                 ...post,
-                user_name: user?.full_name || 'Unknown User',
-                user_avatar: user?.avatar_url || null,
+                user_name: (user as any)?.full_name || (user as any)?.username || 'Unknown User',
+                username: (user as any)?.username || null,
+                user_avatar: (user as any)?.avatar_url || null,
                 is_liked: likedPostIds.has(post._id.toString()),
             };
         });

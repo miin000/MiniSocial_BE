@@ -17,7 +17,11 @@ export class PostsController {
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
     @Query('user_id') userId?: string,
+    @Query('group_id') groupId?: string,
   ) {
+    if (groupId) {
+      return this.postsService.findByGroupId(groupId, parseInt(page), parseInt(limit), userId);
+    }
     return this.postsService.findAll(parseInt(page), parseInt(limit), userId);
   }
 

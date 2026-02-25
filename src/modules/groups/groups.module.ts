@@ -5,7 +5,7 @@ import { GroupsService } from './groups.service';
 import { GroupsController } from './groups.controller';
 import { Group, GroupSchema } from './schemas/group.scheme';
 import { GroupMember, GroupMemberSchema } from './schemas/group-member.scheme';
-import { GroupPost, GroupPostSchema } from './schemas/group-post.scheme';
+import { Post, PostSchema } from '../posts/schemas/post.scheme';
 import { GroupRolesGuard } from './guards/group-roles.guard';
 import { User, UserSchema } from '../users/schemas/user.scheme';
 import { Like, LikeSchema } from '../likes/schemas/like.scheme';
@@ -15,7 +15,7 @@ import { Like, LikeSchema } from '../likes/schemas/like.scheme';
     MongooseModule.forFeature([
       { name: Group.name, schema: GroupSchema },
       { name: GroupMember.name, schema: GroupMemberSchema },
-      { name: GroupPost.name, schema: GroupPostSchema },
+      { name: Post.name, schema: PostSchema },
       { name: User.name, schema: UserSchema },
       { name: Like.name, schema: LikeSchema },
     ])
