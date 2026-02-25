@@ -4,9 +4,21 @@ import { HydratedDocument } from 'mongoose';
 
 export type ReportDocument = HydratedDocument<Report>;
 
+export enum ReportType {
+    POST = 'post',
+    USER = 'user',
+    COMMENT = 'comment',
+}
+
+export enum ReportStatus {
+    PENDING = 'pending',
+    RESOLVED = 'resolved',
+    REJECTED = 'rejected',
+}
+
 @Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Report {
-    @Prop()
+    @Prop({ required: true })
     reporter_id: string;
 
     @Prop()
@@ -15,22 +27,22 @@ export class Report {
     @Prop()
     reported_post_id: string;
 
-    // @Prop()
-    // reported_message_id: string;
-
     @Prop()
+    group_id: string;
+
+    @Prop({ type: String, enum: ReportType, default: ReportType.POST })
     type: string;
 
-    @Prop()
+    @Prop({ required: true })
     reason: string;
 
     @Prop()
     description: string;
 
-    @Prop()
+    @Prop([String])
     evidence_urls: string[];
 
-    @Prop()
+    @Prop({ type: String, enum: ReportStatus, default: ReportStatus.PENDING })
     status: string;
 
     @Prop()
@@ -42,7 +54,11 @@ export class Report {
     @Prop()
     resolved_note: string;
 
+    @Prop()
+    action_taken: string;
+
     created_at: Date;
+    updated_at: Date;
 }
 
 export const ReportSchema = SchemaFactory.createForClass(Report);

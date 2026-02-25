@@ -197,10 +197,6 @@ export class GroupsController {
   @Post(':id/transfer-admin')
   @UseGuards(GroupRolesGuard)
   @GroupRoles(GroupMemberRole.ADMIN)
-  // UC5.13: Transfer admin
-  @Post(':id/transfer-admin')
-  @UseGuards(GroupRolesGuard)
-  @GroupRoles(GroupMemberRole.ADMIN)
   async transferAdmin(@Param('id') id: string, @Request() req, @Body() transferAdminDto: TransferAdminDto) {
     try {
       await this.groupsService.transferAdmin(id, req.user.userId, transferAdminDto.new_admin_id);

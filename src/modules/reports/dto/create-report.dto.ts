@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsEnum } from 'class-validator';
 
 export class CreateReportDto {
     @IsString()
@@ -11,6 +11,10 @@ export class CreateReportDto {
     @IsOptional()
     @IsString()
     reported_post_id?: string;
+
+    @IsOptional()
+    @IsString()
+    group_id?: string;
 
     @IsString()
     type: string; // 'post', 'user', 'comment'
@@ -26,4 +30,13 @@ export class CreateReportDto {
     @IsArray()
     @IsString({ each: true })
     evidence_urls?: string[];
+}
+
+export class ResolveReportDto {
+    @IsString()
+    resolved_note: string;
+
+    @IsOptional()
+    @IsString()
+    action_taken?: string; // 'remove_post', 'ban_user', 'warn_user', 'none'
 }

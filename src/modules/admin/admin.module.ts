@@ -9,6 +9,7 @@ import { Group, GroupSchema } from '../groups/schemas/group.scheme';
 import { GroupMember, GroupMemberSchema } from '../groups/schemas/group-member.scheme';
 import { Post, PostSchema } from '../posts/schemas/post.scheme';
 import { User, UserSchema } from '../users/schemas/user.scheme';
+import { Report, ReportSchema } from '../reports/schemas/report.scheme';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
 
@@ -22,6 +23,7 @@ import { AuthModule } from '../auth/auth.module';
       { name: GroupMember.name, schema: GroupMemberSchema },
       { name: Post.name, schema: PostSchema },
       { name: User.name, schema: UserSchema },
+      { name: Report.name, schema: ReportSchema },
     ]),
     UsersModule,
     AuthModule,

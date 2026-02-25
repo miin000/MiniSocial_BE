@@ -502,7 +502,11 @@ export class GroupsService {
         }
 
         const updatedMember = await this.groupMemberModel
-            .findByIdAndUpdate(memberId, { role: newRole }, { new: true })
+            .findOneAndUpdate(
+                { group_id: groupId, user_id: memberId },
+                { role: newRole },
+                { new: true },
+            )
             .exec();
             
         if (!updatedMember) {
