@@ -51,7 +51,8 @@ export class GroupsService {
         const myGroupObjectIds = myGroups.map(g => g._id.toString());
         const actualCounts = await this.groupMemberModel.aggregate([
             { $match: { group_id: { $in: myGroupObjectIds }, status: GroupMemberStatus.ACTIVE } },
-            { $lookup: { from: 'users', localField: 'user_id', foreignField: '_id', as: 'userDoc' } },
+            { $addFields: { user_id_obj: { $toObjectId: '$user_id' } } },
+            { $lookup: { from: 'users', localField: 'user_id_obj', foreignField: '_id', as: 'userDoc' } },
             { $match: { 'userDoc': { $ne: [] } } },
             { $group: { _id: '$group_id', count: { $sum: 1 } } },
         ]).exec();

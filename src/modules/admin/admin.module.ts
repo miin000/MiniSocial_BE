@@ -7,7 +7,8 @@ import { SystemSettings, SystemSettingsSchema } from './schemas/system-settings.
 import { UserActivityLog, UserActivityLogSchema } from './schemas/user-activity-log.schema';
 import { Group, GroupSchema } from '../groups/schemas/group.scheme';
 import { GroupMember, GroupMemberSchema } from '../groups/schemas/group-member.scheme';
-import { GroupPost, GroupPostSchema } from '../groups/schemas/group-post.scheme';
+import { Post, PostSchema } from '../posts/schemas/post.scheme';
+import { User, UserSchema } from '../users/schemas/user.scheme';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
 
@@ -19,7 +20,8 @@ import { AuthModule } from '../auth/auth.module';
       { name: UserActivityLog.name, schema: UserActivityLogSchema },
       { name: Group.name, schema: GroupSchema },
       { name: GroupMember.name, schema: GroupMemberSchema },
-      { name: GroupPost.name, schema: GroupPostSchema },
+      { name: Post.name, schema: PostSchema },
+      { name: User.name, schema: UserSchema },
     ]),
     UsersModule,
     AuthModule,

@@ -1,5 +1,5 @@
 ﻿
-import { Controller, Get, Put, Delete, Param, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Param, Body, Query, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -57,5 +57,49 @@ export class AdminController {
   @Put('groups/:id/status')
   async toggleGroupStatus(@Param('id') id: string, @Body() body: { status: 'active' | 'blocked' }) {
     return this.adminService.toggleGroupStatus(id, body.status);
+  }
+
+  // ============ Admin Account Management ============
+
+  // Get all admin accounts (admin, moderator, viewer)
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('accounts')
+  async getAdminAccounts() {
+    return this.adminService.getAdminAccounts();
+  }
+
+  // Search users to add as admin account
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('accounts/search')
+  async searchUsersForAdmin(@Query('q') query: string) {
+    return this.adminService.searchUsersForAdmin(query);
+  }
+
+  // Add a user as moderator/viewer
+  @Roles(UserRoleAdmin.ADMIN)
+  @Post('accounts/:id')
+  async addAdminAccount(
+    @Param('id') id: string,
+    @Body() body: { role: UserRoleAdmin },
+  ) {
+    return this.adminService.addAdminAccount(id, body.role);
+  }
+
+  // Update admin account role
+  @Roles(UserRoleAdmin.ADMIN)
+  @Put('accounts/:id')
+  async updateAdminAccount(
+    @Param('id') id: string,
+    @Body() body: { role: UserRoleAdmin },
+  ) {
+    return this.adminService.updateAdminAccount(id, body.role);
+  }
+
+  // Remove admin account (set role to NONE)
+  @Roles(UserRoleAdmin.ADMIN)
+  @Delete('accounts/:id')
+  @HttpCode(HttpStatus.OK)
+  async removeAdminAccount(@Param('id') id: string) {
+    return this.adminService.removeAdminAccount(id);
   }
 }
