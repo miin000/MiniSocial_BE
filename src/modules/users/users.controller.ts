@@ -16,7 +16,20 @@ export class UsersController {
   // Cập nhật profile
   @UseGuards(AuthGuard('jwt'))
   @Patch('profile')
-  updateProfile(@Request() req, @Body() body: { full_name?: string; bio?: string; phone?: string; gender?: string; birthdate?: Date }) {
+  updateProfile(
+    @Request() req,
+    @Body() body: {
+      full_name?: string;
+      bio?: string;
+      phone?: string;
+      gender?: string;
+      birthdate?: Date;
+      job?: string;
+      location?: string;
+      avatar_url?: string;
+      cover_url?: string;
+    },
+  ) {
     return this.usersService.updateProfile(req.user.user_id, body);
   }
 

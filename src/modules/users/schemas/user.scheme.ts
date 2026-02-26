@@ -44,6 +44,15 @@ export class User {
   bio: string;
 
   @Prop()
+  job: string;
+
+  @Prop()
+  location: string;
+
+  @Prop()
+  cover_url: string;
+
+  @Prop()
   phone: string;
   
   @Prop()
