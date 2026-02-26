@@ -9,7 +9,6 @@ import { Post, PostSchema } from '../posts/schemas/post.scheme';
 import { GroupRolesGuard } from './guards/group-roles.guard';
 import { User, UserSchema } from '../users/schemas/user.scheme';
 import { Like, LikeSchema } from '../likes/schemas/like.scheme';
-import { Notification, NotificationSchema } from '../notifications/schemas/notification.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 
 @Module({
@@ -20,7 +19,6 @@ import { FirebaseService } from '../../common/services/firebase.service';
       { name: Post.name, schema: PostSchema },
       { name: User.name, schema: UserSchema },
       { name: Like.name, schema: LikeSchema },
-      { name: Notification.name, schema: NotificationSchema },
     ])
   ],
   controllers: [GroupsController],

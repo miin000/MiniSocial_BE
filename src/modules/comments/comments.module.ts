@@ -6,7 +6,6 @@ import { CommentSchema } from './schemas/comment.scheme';
 import { PostsModule } from '../posts/posts.module';
 import { UserSchema } from '../users/schemas/user.scheme';
 import { LikeSchema } from '../likes/schemas/like.scheme';
-import { Notification, NotificationSchema } from '../notifications/schemas/notification.scheme';
 import { PostSchema } from '../posts/schemas/post.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 
@@ -16,7 +15,6 @@ import { FirebaseService } from '../../common/services/firebase.service';
       { name: 'Comment', schema: CommentSchema },
       { name: 'User', schema: UserSchema },
       { name: 'Like', schema: LikeSchema },
-      { name: Notification.name, schema: NotificationSchema },
       { name: 'Post', schema: PostSchema },
     ]),
     PostsModule,

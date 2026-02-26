@@ -11,7 +11,6 @@ import { GroupMember } from '../groups/schemas/group-member.scheme';
 import { Post, PostStatus } from '../posts/schemas/post.scheme';
 import { User, UserRoleAdmin, UserStatus } from '../users/schemas/user.scheme';
 import { Report, ReportStatus } from '../reports/schemas/report.scheme';
-import { Notification } from '../notifications/schemas/notification.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 
 @Injectable()
@@ -25,7 +24,6 @@ export class AdminService {
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(Report.name) private reportModel: Model<Report>,
-        @InjectModel(Notification.name) private notificationModel: Model<Notification>,
         private usersService: UsersService,
         private readonly firebaseService: FirebaseService,
     ) { }
@@ -443,18 +441,9 @@ export class AdminService {
         userId: string, senderId: string, type: string,
         content: string, refId?: string, refType?: string,
     ) {
-        const saved = await this.notificationModel.create({
-            user_id: userId,
-            sender_id: senderId,
-            type,
-            content,
-            ref_id: refId || null,
-            ref_type: refType || 'system',
-            is_read: false,
-        });
         await this.firebaseService.writeNotification({
             user_id: userId, sender_id: senderId, type, content,
-            ref_id: refId, ref_type: refType || 'system', mongo_id: saved._id.toString(),
+            ref_id: refId, ref_type: refType || 'system',
         });
     }
 

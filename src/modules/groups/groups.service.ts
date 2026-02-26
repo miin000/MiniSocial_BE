@@ -7,7 +7,6 @@ import { GroupMember, GroupMemberRole, GroupMemberStatus } from './schemas/group
 import { Post, PostStatus } from '../posts/schemas/post.scheme';
 import { User } from '../users/schemas/user.scheme';
 import { Like } from '../likes/schemas/like.scheme';
-import { Notification } from '../notifications/schemas/notification.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
@@ -21,7 +20,6 @@ export class GroupsService {
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(Like.name) private likeModel: Model<Like>,
-        @InjectModel(Notification.name) private notificationModel: Model<Notification>,
         private readonly firebaseService: FirebaseService,
     ) { }
 
@@ -29,13 +27,9 @@ export class GroupsService {
     private async notify(userId: string, senderId: string, type: string, content: string, refId?: string, refType?: string) {
         try {
             if (userId === senderId) return; // Don't notify self
-            const saved = await this.notificationModel.create({
-                user_id: userId, sender_id: senderId, type, content,
-                ref_id: refId, ref_type: refType, is_read: false,
-            });
             await this.firebaseService.writeNotification({
                 user_id: userId, sender_id: senderId, type, content,
-                ref_id: refId, ref_type: refType, mongo_id: saved._id.toString(),
+                ref_id: refId, ref_type: refType,
             });
         } catch (e) {}
     }

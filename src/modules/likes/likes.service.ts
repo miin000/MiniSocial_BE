@@ -3,14 +3,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Like } from './schemas/like.scheme';
 import { CreateLikeDto } from './dto/create-like.dto';
-import { Notification } from '../notifications/schemas/notification.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 
 @Injectable()
 export class LikesService {
     constructor(
         @InjectModel(Like.name) private likeModel: Model<Like>,
-        @InjectModel(Notification.name) private notificationModel: Model<Notification>,
         @InjectModel('User') private userModel: Model<any>,
         @InjectModel('Post') private postModel: Model<any>,
         @InjectModel('Comment') private commentModel: Model<any>,
@@ -68,19 +66,9 @@ export class LikesService {
             }
 
             if (ownerId && ownerId !== dto.user_id) {
-                const saved = await this.notificationModel.create({
-                    user_id: ownerId,
-                    sender_id: dto.user_id,
-                    type: 'like',
-                    content,
-                    ref_id: refId,
-                    ref_type: refType,
-                    is_read: false,
-                });
                 await this.firebaseService.writeNotification({
                     user_id: ownerId, sender_id: dto.user_id,
                     type: 'like', content, ref_id: refId, ref_type: refType,
-                    mongo_id: saved._id.toString(),
                 });
             }
         } catch (e) {

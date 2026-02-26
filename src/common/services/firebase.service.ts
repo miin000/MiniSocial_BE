@@ -37,7 +37,9 @@ export class FirebaseService implements OnModuleInit {
         return this.firestore || null;
     }
 
-    // Ghi notification vào Firestore để Flutter nhận real-time
+    // ==================== NOTIFICATION CRUD (Firestore only) ====================
+
+    // Tạo notification mới vào Firestore
     async writeNotification(data: {
         user_id: string;
         sender_id?: string;
@@ -45,12 +47,11 @@ export class FirebaseService implements OnModuleInit {
         content: string;
         ref_id?: string;
         ref_type?: string;
-        mongo_id?: string;
-    }) {
+    }): Promise<string | null> {
         try {
-            if (!this.firestore) return;
+            if (!this.firestore) return null;
 
-            await this.firestore
+            const docRef = await this.firestore
                 .collection('notifications')
                 .add({
                     user_id: data.user_id,
@@ -59,35 +60,107 @@ export class FirebaseService implements OnModuleInit {
                     content: data.content,
                     ref_id: data.ref_id || null,
                     ref_type: data.ref_type || null,
-                    mongo_id: data.mongo_id || null,
                     is_read: false,
                     created_at: admin.firestore.FieldValue.serverTimestamp(),
                 });
+            return docRef.id;
         } catch (error) {
             this.logger.warn('Failed to write notification to Firestore:', error.message);
+            return null;
         }
     }
 
-    // Đánh dấu đọc trên Firestore
-    async markNotificationRead(mongoId: string) {
+    // Lấy notifications theo user_id (phân trang)
+    async getNotifications(userId: string, page: number = 1, limit: number = 20) {
         try {
-            if (!this.firestore) return;
+            if (!this.firestore) return { data: [], total: 0, page, limit, totalPages: 0 };
+
+            // Lấy tổng số
+            const countSnapshot = await this.firestore
+                .collection('notifications')
+                .where('user_id', '==', userId)
+                .count()
+                .get();
+            const total = countSnapshot.data().count;
+
+            // Lấy data phân trang
+            let query = this.firestore
+                .collection('notifications')
+                .where('user_id', '==', userId)
+                .orderBy('created_at', 'desc')
+                .limit(limit);
+
+            // Skip bằng cách lấy doc cuối của page trước
+            if (page > 1) {
+                const skipDocs = await this.firestore
+                    .collection('notifications')
+                    .where('user_id', '==', userId)
+                    .orderBy('created_at', 'desc')
+                    .limit((page - 1) * limit)
+                    .get();
+                if (!skipDocs.empty) {
+                    const lastDoc = skipDocs.docs[skipDocs.docs.length - 1];
+                    query = query.startAfter(lastDoc);
+                }
+            }
+
+            const snapshot = await query.get();
+            const data = snapshot.docs.map(doc => ({
+                _id: doc.id,
+                ...doc.data(),
+                created_at: doc.data().created_at?.toDate?.() || new Date(),
+            }));
+
+            return {
+                data,
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            };
+        } catch (error) {
+            this.logger.warn('Failed to get notifications from Firestore:', error.message);
+            return { data: [], total: 0, page, limit, totalPages: 0 };
+        }
+    }
+
+    // Đếm notification chưa đọc
+    async getUnreadCount(userId: string): Promise<number> {
+        try {
+            if (!this.firestore) return 0;
 
             const snapshot = await this.firestore
                 .collection('notifications')
-                .where('mongo_id', '==', mongoId)
-                .limit(1)
+                .where('user_id', '==', userId)
+                .where('is_read', '==', false)
+                .count()
                 .get();
-
-            if (!snapshot.empty) {
-                await snapshot.docs[0].ref.update({ is_read: true });
-            }
+            return snapshot.data().count;
         } catch (error) {
-            this.logger.warn('Failed to mark notification read in Firestore:', error.message);
+            this.logger.warn('Failed to get unread count from Firestore:', error.message);
+            return 0;
         }
     }
 
-    // Đánh dấu tất cả đọc trên Firestore
+    // Đánh dấu 1 notification đã đọc (theo Firestore doc ID)
+    async markNotificationRead(notificationId: string, userId: string): Promise<boolean> {
+        try {
+            if (!this.firestore) return false;
+
+            const docRef = this.firestore.collection('notifications').doc(notificationId);
+            const doc = await docRef.get();
+            if (doc.exists && doc.data()?.user_id === userId) {
+                await docRef.update({ is_read: true });
+                return true;
+            }
+            return false;
+        } catch (error) {
+            this.logger.warn('Failed to mark notification read in Firestore:', error.message);
+            return false;
+        }
+    }
+
+    // Đánh dấu tất cả đọc
     async markAllNotificationsRead(userId: string) {
         try {
             if (!this.firestore) return;
@@ -103,27 +176,28 @@ export class FirebaseService implements OnModuleInit {
                 batch.update(doc.ref, { is_read: true });
             });
             await batch.commit();
+            return { modifiedCount: snapshot.size };
         } catch (error) {
             this.logger.warn('Failed to mark all read in Firestore:', error.message);
+            return { modifiedCount: 0 };
         }
     }
 
-    // Xóa notification trên Firestore
-    async deleteNotification(mongoId: string) {
+    // Xóa notification (theo Firestore doc ID)
+    async deleteNotification(notificationId: string, userId: string): Promise<boolean> {
         try {
-            if (!this.firestore) return;
+            if (!this.firestore) return false;
 
-            const snapshot = await this.firestore
-                .collection('notifications')
-                .where('mongo_id', '==', mongoId)
-                .limit(1)
-                .get();
-
-            if (!snapshot.empty) {
-                await snapshot.docs[0].ref.delete();
+            const docRef = this.firestore.collection('notifications').doc(notificationId);
+            const doc = await docRef.get();
+            if (doc.exists && doc.data()?.user_id === userId) {
+                await docRef.delete();
+                return true;
             }
+            return false;
         } catch (error) {
             this.logger.warn('Failed to delete notification from Firestore:', error.message);
+            return false;
         }
     }
 

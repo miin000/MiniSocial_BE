@@ -4,7 +4,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Friend, FriendDocument } from './schemas/friend.scheme';
 import { UsersService } from '../users/users.service';
-import { Notification } from '../notifications/schemas/notification.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 
 @Injectable()
@@ -13,7 +12,6 @@ export class FriendsService {
 
     constructor(
         @InjectModel(Friend.name) private friendModel: Model<FriendDocument>,
-        @InjectModel(Notification.name) private notificationModel: Model<Notification>,
         private readonly usersService: UsersService,
         private readonly firebaseService: FirebaseService,
     ) {}
@@ -148,19 +146,10 @@ export class FriendsService {
         try {
             const sender = await this.usersService.findById(fromUserId);
             const senderName = (sender as any).full_name || (sender as any).username || 'Ai đó';
-            const saved = await this.notificationModel.create({
-                user_id: toUserId,
-                sender_id: fromUserId,
-                type: 'friend_request',
-                content: `${senderName} đã gửi lời mời kết bạn cho bạn.`,
-                ref_id: created._id.toString(),
-                ref_type: 'friend',
-                is_read: false,
-            });
             await this.firebaseService.writeNotification({
                 user_id: toUserId, sender_id: fromUserId,
                 type: 'friend_request', content: `${senderName} đã gửi lời mời kết bạn cho bạn.`,
-                ref_id: created._id.toString(), ref_type: 'friend', mongo_id: saved._id.toString(),
+                ref_id: created._id.toString(), ref_type: 'friend',
             });
         } catch (e) {}
 
@@ -190,19 +179,10 @@ export class FriendsService {
             const acceptor = await this.usersService.findById(userId);
             const acceptorName = (acceptor as any).full_name || (acceptor as any).username || 'Ai đó';
             if (senderId && senderId !== userId) {
-                const saved = await this.notificationModel.create({
-                    user_id: senderId,
-                    sender_id: userId,
-                    type: 'friend_accepted',
-                    content: `${acceptorName} đã chấp nhận lời mời kết bạn của bạn.`,
-                    ref_id: requestId,
-                    ref_type: 'friend',
-                    is_read: false,
-                });
                 await this.firebaseService.writeNotification({
                     user_id: senderId, sender_id: userId,
                     type: 'friend_accepted', content: `${acceptorName} đã chấp nhận lời mời kết bạn của bạn.`,
-                    ref_id: requestId, ref_type: 'friend', mongo_id: saved._id.toString(),
+                    ref_id: requestId, ref_type: 'friend',
                 });
             }
         } catch (e) {}
