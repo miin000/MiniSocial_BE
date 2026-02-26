@@ -4,10 +4,14 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthGuard } from '@nestjs/passport';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private firebaseService: FirebaseService,
+  ) {}
 
   // R1.4.1: Đăng ký tài khoản
   @Post('register')
@@ -27,5 +31,15 @@ export class AuthController {
   getProfile(@Request() req) {  
     // req.user được gán từ hàm validate() của JwtStrategy
     return req.user;
+  }
+
+  // Lấy Firebase Custom Token để Flutter sign in Firebase Auth
+  // Dùng cho Firestore security rules xác thực user
+  @UseGuards(AuthGuard('jwt'))
+  @Get('firebase-token')
+  async getFirebaseToken(@Request() req) {
+    const userId = req.user.sub || req.user._id || req.user.id;
+    const firebaseToken = await this.firebaseService.createCustomToken(String(userId));
+    return { firebaseToken };
   }
 }

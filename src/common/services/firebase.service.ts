@@ -126,4 +126,16 @@ export class FirebaseService implements OnModuleInit {
             this.logger.warn('Failed to delete notification from Firestore:', error.message);
         }
     }
+
+    // Tạo Firebase Custom Token để Flutter sign in Firebase Auth
+    // Dùng MongoDB user ID làm Firebase UID → Firestore rules match user_id
+    async createCustomToken(userId: string): Promise<string | null> {
+        try {
+            const token = await admin.auth().createCustomToken(userId);
+            return token;
+        } catch (error) {
+            this.logger.warn('Failed to create Firebase custom token:', error.message);
+            return null;
+        }
+    }
 }
