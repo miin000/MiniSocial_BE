@@ -21,6 +21,7 @@ import { PostsModule } from './modules/posts/posts.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from 'modules/auth/auth.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { UploadModule } from './modules/upload/upload.module';
     GroupMembersModule,
     LikesModule,
     MessagesModule,
+    ReportsModule,
     
     // Serve static files from uploads directory (must be last)
     ServeStaticModule.forRoot({
