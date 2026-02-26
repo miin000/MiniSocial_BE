@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { Like } from './schemas/like.scheme';
 import { CreateLikeDto } from './dto/create-like.dto';
 import { Notification } from '../notifications/schemas/notification.scheme';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 @Injectable()
 export class LikesService {
@@ -13,6 +14,7 @@ export class LikesService {
         @InjectModel('User') private userModel: Model<any>,
         @InjectModel('Post') private postModel: Model<any>,
         @InjectModel('Comment') private commentModel: Model<any>,
+        private readonly firebaseService: FirebaseService,
     ) { }
 
     async toggleLike(createLikeDto: CreateLikeDto): Promise<{ liked: boolean, like?: Like }> {
@@ -66,7 +68,7 @@ export class LikesService {
             }
 
             if (ownerId && ownerId !== dto.user_id) {
-                await this.notificationModel.create({
+                const saved = await this.notificationModel.create({
                     user_id: ownerId,
                     sender_id: dto.user_id,
                     type: 'like',
@@ -74,6 +76,11 @@ export class LikesService {
                     ref_id: refId,
                     ref_type: refType,
                     is_read: false,
+                });
+                await this.firebaseService.writeNotification({
+                    user_id: ownerId, sender_id: dto.user_id,
+                    type: 'like', content, ref_id: refId, ref_type: refType,
+                    mongo_id: saved._id.toString(),
                 });
             }
         } catch (e) {

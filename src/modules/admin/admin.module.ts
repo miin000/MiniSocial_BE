@@ -13,6 +13,7 @@ import { Report, ReportSchema } from '../reports/schemas/report.scheme';
 import { Notification, NotificationSchema } from '../notifications/schemas/notification.scheme';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 @Module({
   imports: [
@@ -31,7 +32,7 @@ import { AuthModule } from '../auth/auth.module';
     AuthModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService],
+  providers: [AdminService, FirebaseService],
   exports: [AdminService],
 })
 export class AdminModule {}

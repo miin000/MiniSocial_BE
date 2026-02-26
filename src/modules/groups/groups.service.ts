@@ -8,6 +8,7 @@ import { Post, PostStatus } from '../posts/schemas/post.scheme';
 import { User } from '../users/schemas/user.scheme';
 import { Like } from '../likes/schemas/like.scheme';
 import { Notification } from '../notifications/schemas/notification.scheme';
+import { FirebaseService } from '../../common/services/firebase.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupPostDto } from './dto/create-group-post.dto';
@@ -21,15 +22,20 @@ export class GroupsService {
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(Like.name) private likeModel: Model<Like>,
         @InjectModel(Notification.name) private notificationModel: Model<Notification>,
+        private readonly firebaseService: FirebaseService,
     ) { }
 
     // Helper to create notification
     private async notify(userId: string, senderId: string, type: string, content: string, refId?: string, refType?: string) {
         try {
             if (userId === senderId) return; // Don't notify self
-            await this.notificationModel.create({
+            const saved = await this.notificationModel.create({
                 user_id: userId, sender_id: senderId, type, content,
                 ref_id: refId, ref_type: refType, is_read: false,
+            });
+            await this.firebaseService.writeNotification({
+                user_id: userId, sender_id: senderId, type, content,
+                ref_id: refId, ref_type: refType, mongo_id: saved._id.toString(),
             });
         } catch (e) {}
     }

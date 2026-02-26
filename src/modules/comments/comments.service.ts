@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { Comment } from './schemas/comment.scheme';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { Notification } from '../notifications/schemas/notification.scheme';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 @Injectable()
 export class CommentsService {
@@ -13,6 +14,7 @@ export class CommentsService {
         @InjectModel('Like') private likeModel: Model<any>,
         @InjectModel(Notification.name) private notificationModel: Model<Notification>,
         @InjectModel('Post') private postModel: Model<any>,
+        private readonly firebaseService: FirebaseService,
     ) { }
 
     async create(createCommentDto: CreateCommentDto): Promise<Comment> {
@@ -83,7 +85,7 @@ export class CommentsService {
                 // Reply to a comment - notify the parent comment owner
                 const parentComment: any = await this.commentModel.findById(dto.parent_id).select('user_id').lean().exec();
                 if (parentComment && parentComment.user_id !== dto.user_id) {
-                    await this.notificationModel.create({
+                    const saved = await this.notificationModel.create({
                         user_id: parentComment.user_id,
                         sender_id: dto.user_id,
                         type: 'comment',
@@ -92,13 +94,18 @@ export class CommentsService {
                         ref_type: 'post',
                         is_read: false,
                     });
+                    await this.firebaseService.writeNotification({
+                        user_id: parentComment.user_id, sender_id: dto.user_id,
+                        type: 'comment', content: `${senderName} đã trả lời bình luận của bạn.`,
+                        ref_id: dto.post_id, ref_type: 'post', mongo_id: saved._id.toString(),
+                    });
                 }
             }
 
             // Notify post owner
             const post: any = await this.postModel.findById(dto.post_id).select('user_id').lean().exec();
             if (post && post.user_id !== dto.user_id) {
-                await this.notificationModel.create({
+                const saved = await this.notificationModel.create({
                     user_id: post.user_id,
                     sender_id: dto.user_id,
                     type: 'comment',
@@ -106,6 +113,11 @@ export class CommentsService {
                     ref_id: dto.post_id,
                     ref_type: 'post',
                     is_read: false,
+                });
+                await this.firebaseService.writeNotification({
+                    user_id: post.user_id, sender_id: dto.user_id,
+                    type: 'comment', content: `${senderName} đã bình luận bài viết của bạn.`,
+                    ref_id: dto.post_id, ref_type: 'post', mongo_id: saved._id.toString(),
                 });
             }
         } catch (e) {

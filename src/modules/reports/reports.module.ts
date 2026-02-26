@@ -7,6 +7,7 @@ import { ReportsService } from './reports.service';
 import { Post, PostSchema } from '../posts/schemas/post.scheme';
 import { User, UserSchema } from '../users/schemas/user.scheme';
 import { Notification, NotificationSchema } from '../notifications/schemas/notification.scheme';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { Notification, NotificationSchema } from '../notifications/schemas/notif
   ],
 
   controllers: [ReportsController],
-  providers: [ReportsService],
+  providers: [ReportsService, FirebaseService],
   exports: [ReportsService],
 })
 export class ReportsModule {}

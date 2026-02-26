@@ -9,6 +9,7 @@ import { Notification, NotificationSchema } from '../notifications/schemas/notif
 import { UserSchema } from '../users/schemas/user.scheme';
 import { PostSchema } from '../posts/schemas/post.scheme';
 import { CommentSchema } from '../comments/schemas/comment.scheme';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 
 @Module({
@@ -25,7 +26,7 @@ import { CommentSchema } from '../comments/schemas/comment.scheme';
   ],
 
   controllers: [LikesController],
-  providers: [LikesService],
+  providers: [LikesService, FirebaseService],
   exports: [LikesService],
 })
 export class LikesModule {}

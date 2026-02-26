@@ -10,6 +10,7 @@ import { GroupRolesGuard } from './guards/group-roles.guard';
 import { User, UserSchema } from '../users/schemas/user.scheme';
 import { Like, LikeSchema } from '../likes/schemas/like.scheme';
 import { Notification, NotificationSchema } from '../notifications/schemas/notification.scheme';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { Notification, NotificationSchema } from '../notifications/schemas/notif
     ])
   ],
   controllers: [GroupsController],
-  providers: [GroupsService, GroupRolesGuard],
+  providers: [GroupsService, GroupRolesGuard, FirebaseService],
   exports: [GroupsService],
 })
 export class GroupsModule {}

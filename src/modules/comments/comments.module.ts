@@ -8,6 +8,7 @@ import { UserSchema } from '../users/schemas/user.scheme';
 import { LikeSchema } from '../likes/schemas/like.scheme';
 import { Notification, NotificationSchema } from '../notifications/schemas/notification.scheme';
 import { PostSchema } from '../posts/schemas/post.scheme';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { PostSchema } from '../posts/schemas/post.scheme';
   ],
 
   controllers: [CommentsController],
-  providers: [CommentsService],
+  providers: [CommentsService, FirebaseService],
   exports: [CommentsService],
 })
 export class CommentsModule {}

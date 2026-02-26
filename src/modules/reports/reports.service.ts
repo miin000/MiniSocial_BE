@@ -7,6 +7,7 @@ import { CreateReportDto, ResolveReportDto } from './dto/create-report.dto';
 import { Post, PostStatus } from '../posts/schemas/post.scheme';
 import { User, UserStatus } from '../users/schemas/user.scheme';
 import { Notification } from '../notifications/schemas/notification.scheme';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 @Injectable()
 export class ReportsService {
@@ -15,6 +16,7 @@ export class ReportsService {
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(Notification.name) private notificationModel: Model<Notification>,
+        private readonly firebaseService: FirebaseService,
     ) { }
 
     async create(createReportDto: CreateReportDto): Promise<Report> {
@@ -138,7 +140,7 @@ export class ReportsService {
         userId: string, senderId: string, type: string,
         content: string, refId?: string, refType?: string,
     ) {
-        await this.notificationModel.create({
+        const saved = await this.notificationModel.create({
             user_id: userId,
             sender_id: senderId,
             type,
@@ -146,6 +148,10 @@ export class ReportsService {
             ref_id: refId || null,
             ref_type: refType || 'system',
             is_read: false,
+        });
+        await this.firebaseService.writeNotification({
+            user_id: userId, sender_id: senderId, type, content,
+            ref_id: refId, ref_type: refType || 'system', mongo_id: saved._id.toString(),
         });
     }
 
