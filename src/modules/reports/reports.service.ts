@@ -5,7 +5,8 @@ import { Model } from 'mongoose';
 import { Report, ReportStatus } from './schemas/report.scheme';
 import { CreateReportDto, ResolveReportDto } from './dto/create-report.dto';
 import { Post, PostStatus } from '../posts/schemas/post.scheme';
-import { User } from '../users/schemas/user.scheme';
+import { User, UserStatus } from '../users/schemas/user.scheme';
+import { Notification } from '../notifications/schemas/notification.scheme';
 
 @Injectable()
 export class ReportsService {
@@ -13,6 +14,7 @@ export class ReportsService {
         @InjectModel(Report.name) private reportModel: Model<Report>,
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel(User.name) private userModel: Model<User>,
+        @InjectModel(Notification.name) private notificationModel: Model<Notification>,
     ) { }
 
     async create(createReportDto: CreateReportDto): Promise<Report> {
@@ -71,20 +73,80 @@ export class ReportsService {
         report.resolved_note = dto.resolved_note;
         report.action_taken = dto.action_taken || 'none';
 
+        // Determine the target user (post author or reported user)
+        let targetUserId: string | null = report.reported_id || null;
+        if (!targetUserId && report.reported_post_id) {
+            const post = await this.postModel.findById(report.reported_post_id).exec();
+            if (post) targetUserId = post.user_id;
+        }
+
         // Apply action
         if (dto.action_taken === 'remove_post' && report.reported_post_id) {
             await this.postModel.findByIdAndUpdate(report.reported_post_id, {
                 status: PostStatus.DELETED,
             });
-        } else if (dto.action_taken === 'ban_user' && report.reported_id) {
-            await this.userModel.findByIdAndUpdate(report.reported_id, {
-                status: 'BLOCKED',
+            // Notify post author
+            if (targetUserId) {
+                await this.createNotification(targetUserId, resolvedBy, 'report_post_removed',
+                    'Bài viết của bạn đã bị xóa do vi phạm quy định cộng đồng.', report.reported_post_id, 'post');
+            }
+        } else if (dto.action_taken === 'hide_post' && report.reported_post_id) {
+            await this.postModel.findByIdAndUpdate(report.reported_post_id, {
+                status: PostStatus.HIDDEN,
             });
+            if (targetUserId) {
+                await this.createNotification(targetUserId, resolvedBy, 'report_post_hidden',
+                    'Bài viết của bạn đã bị ẩn do vi phạm quy định cộng đồng.', report.reported_post_id, 'post');
+            }
+        } else if (dto.action_taken === 'warn_user' && targetUserId) {
+            // Increment warning count, flag at 2, block at 3
+            const user = await this.userModel.findById(targetUserId).exec();
+            if (user) {
+                const newWarningCount = (user.warning_count || 0) + 1;
+                const updates: any = { warning_count: newWarningCount };
+
+                if (newWarningCount >= 3) {
+                    updates.status = UserStatus.BLOCKED;
+                    await this.createNotification(targetUserId, resolvedBy, 'account_blocked',
+                        `Tài khoản của bạn đã bị khóa do vi phạm quy định cộng đồng ${newWarningCount} lần.`, undefined, 'system');
+                } else if (newWarningCount >= 2) {
+                    updates.status = UserStatus.FLAGGED;
+                    await this.createNotification(targetUserId, resolvedBy, 'account_warning',
+                        `Cảnh cáo lần ${newWarningCount}: Bạn đã bị đánh dấu cờ. Thêm 1 lần vi phạm nữa sẽ bị khóa tài khoản.`, undefined, 'system');
+                } else {
+                    await this.createNotification(targetUserId, resolvedBy, 'account_warning',
+                        `Cảnh cáo lần ${newWarningCount}: Bạn đã vi phạm quy định cộng đồng. Vui lòng tuân thủ để tránh bị khóa tài khoản.`, undefined, 'system');
+                }
+
+                await this.userModel.findByIdAndUpdate(targetUserId, updates);
+            }
+        } else if (dto.action_taken === 'ban_user' && targetUserId) {
+            await this.userModel.findByIdAndUpdate(targetUserId, {
+                status: UserStatus.BLOCKED,
+            });
+            await this.createNotification(targetUserId, resolvedBy, 'account_blocked',
+                'Tài khoản của bạn đã bị khóa do vi phạm nghiêm trọng quy định cộng đồng.', undefined, 'system');
         }
 
         await report.save();
         const enriched = await this.enrichReports([report]);
         return enriched[0];
+    }
+
+    // Helper to create in-app notification
+    private async createNotification(
+        userId: string, senderId: string, type: string,
+        content: string, refId?: string, refType?: string,
+    ) {
+        await this.notificationModel.create({
+            user_id: userId,
+            sender_id: senderId,
+            type,
+            content,
+            ref_id: refId || null,
+            ref_type: refType || 'system',
+            is_read: false,
+        });
     }
 
     async reject(id: string, resolvedBy: string, dto: ResolveReportDto): Promise<any> {

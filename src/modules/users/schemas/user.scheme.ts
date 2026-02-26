@@ -20,6 +20,7 @@ export enum UserRoleAdmin {
 export enum UserStatus {
   ACTIVE = 'ACTIVE',
   BLOCKED = 'BLOCKED',
+  FLAGGED = 'FLAGGED',
 }
 
 
@@ -69,6 +70,9 @@ export class User {
   
   @Prop({ type: String, enum: UserStatus, default: UserStatus.ACTIVE })
   status: UserStatus;
+
+  @Prop({ default: 0 })
+  warning_count: number;
 
   @Prop()
   last_login: Date;

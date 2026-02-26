@@ -10,6 +10,7 @@ import { GroupMember, GroupMemberSchema } from '../groups/schemas/group-member.s
 import { Post, PostSchema } from '../posts/schemas/post.scheme';
 import { User, UserSchema } from '../users/schemas/user.scheme';
 import { Report, ReportSchema } from '../reports/schemas/report.scheme';
+import { Notification, NotificationSchema } from '../notifications/schemas/notification.scheme';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
 
@@ -24,6 +25,7 @@ import { AuthModule } from '../auth/auth.module';
       { name: Post.name, schema: PostSchema },
       { name: User.name, schema: UserSchema },
       { name: Report.name, schema: ReportSchema },
+      { name: Notification.name, schema: NotificationSchema },
     ]),
     UsersModule,
     AuthModule,

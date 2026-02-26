@@ -9,4 +9,76 @@ export class NotificationsService {
     constructor(
         @InjectModel(Notification.name) private notificationModel: Model<Notification>,
     ) { }
+
+    // Create a new notification
+    async create(data: {
+        user_id: string;
+        sender_id?: string;
+        type: string;
+        content: string;
+        ref_id?: string;
+        ref_type?: string;
+    }) {
+        const notification = new this.notificationModel({
+            ...data,
+            is_read: false,
+        });
+        return notification.save();
+    }
+
+    // Get all notifications for a user (paginated)
+    async findAllByUser(userId: string, page: number = 1, limit: number = 20) {
+        const skip = (page - 1) * limit;
+        const [notifications, total] = await Promise.all([
+            this.notificationModel
+                .find({ user_id: userId })
+                .sort({ created_at: -1 })
+                .skip(skip)
+                .limit(limit)
+                .exec(),
+            this.notificationModel.countDocuments({ user_id: userId }),
+        ]);
+
+        return {
+            data: notifications,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+
+    // Get unread count for a user
+    async getUnreadCount(userId: string): Promise<number> {
+        return this.notificationModel.countDocuments({
+            user_id: userId,
+            is_read: false,
+        });
+    }
+
+    // Mark a single notification as read
+    async markAsRead(notificationId: string, userId: string) {
+        return this.notificationModel.findOneAndUpdate(
+            { _id: notificationId, user_id: userId },
+            { is_read: true },
+            { new: true },
+        );
+    }
+
+    // Mark all notifications as read for a user
+    async markAllAsRead(userId: string) {
+        const result = await this.notificationModel.updateMany(
+            { user_id: userId, is_read: false },
+            { is_read: true },
+        );
+        return { modifiedCount: result.modifiedCount };
+    }
+
+    // Delete a notification
+    async delete(notificationId: string, userId: string) {
+        return this.notificationModel.findOneAndDelete({
+            _id: notificationId,
+            user_id: userId,
+        });
+    }
 }
