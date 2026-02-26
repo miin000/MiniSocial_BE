@@ -16,7 +16,7 @@ export class NotificationsController {
     @Query('limit') limit: string = '20',
   ) {
     return this.notificationsService.findAllByUser(
-      req.user.sub,
+      req.user.userId,
       parseInt(page),
       parseInt(limit),
     );
@@ -25,24 +25,24 @@ export class NotificationsController {
   // GET /notifications/unread-count - Get unread notification count
   @Get('unread-count')
   getUnreadCount(@Request() req) {
-    return this.notificationsService.getUnreadCount(req.user.sub).then(count => ({ count }));
+    return this.notificationsService.getUnreadCount(req.user.userId).then(count => ({ count }));
   }
 
   // PUT /notifications/read-all - Mark all notifications as read
   @Put('read-all')
   markAllAsRead(@Request() req) {
-    return this.notificationsService.markAllAsRead(req.user.sub);
+    return this.notificationsService.markAllAsRead(req.user.userId);
   }
 
   // PUT /notifications/:id/read - Mark single notification as read
   @Put(':id/read')
   markAsRead(@Param('id') id: string, @Request() req) {
-    return this.notificationsService.markAsRead(id, req.user.sub);
+    return this.notificationsService.markAsRead(id, req.user.userId);
   }
 
   // DELETE /notifications/:id - Delete a notification
   @Delete(':id')
   delete(@Param('id') id: string, @Request() req) {
-    return this.notificationsService.delete(id, req.user.sub);
+    return this.notificationsService.delete(id, req.user.userId);
   }
 }

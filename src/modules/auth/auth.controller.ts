@@ -38,7 +38,7 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   @Get('firebase-token')
   async getFirebaseToken(@Request() req) {
-    const userId = req.user.sub || req.user._id || req.user.id;
+    const userId = req.user.userId || req.user.user_id;
     const firebaseToken = await this.firebaseService.createCustomToken(String(userId));
     return { firebaseToken };
   }
