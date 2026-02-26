@@ -9,6 +9,7 @@ import { Post, PostSchema } from '../posts/schemas/post.scheme';
 import { GroupRolesGuard } from './guards/group-roles.guard';
 import { User, UserSchema } from '../users/schemas/user.scheme';
 import { Like, LikeSchema } from '../likes/schemas/like.scheme';
+import { Notification, NotificationSchema } from '../notifications/schemas/notification.scheme';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { Like, LikeSchema } from '../likes/schemas/like.scheme';
       { name: Post.name, schema: PostSchema },
       { name: User.name, schema: UserSchema },
       { name: Like.name, schema: LikeSchema },
+      { name: Notification.name, schema: NotificationSchema },
     ])
   ],
   controllers: [GroupsController],

@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Friend, FriendDocument } from './schemas/friend.scheme';
 import { UsersService } from '../users/users.service';
+import { Notification } from '../notifications/schemas/notification.scheme';
 
 @Injectable()
 export class FriendsService {
@@ -11,6 +12,7 @@ export class FriendsService {
 
     constructor(
         @InjectModel(Friend.name) private friendModel: Model<FriendDocument>,
+        @InjectModel(Notification.name) private notificationModel: Model<Notification>,
         private readonly usersService: UsersService,
     ) {}
 
@@ -139,6 +141,22 @@ export class FriendsService {
 
         const created = new this.friendModel({ user_id_1: fromUserId, user_id_2: toUserId, status: 'pending', action_user_id: fromUserId });
         await created.save();
+
+        // Notify recipient about friend request
+        try {
+            const sender = await this.usersService.findById(fromUserId);
+            const senderName = (sender as any).full_name || (sender as any).username || 'Ai đó';
+            await this.notificationModel.create({
+                user_id: toUserId,
+                sender_id: fromUserId,
+                type: 'friend_request',
+                content: `${senderName} đã gửi lời mời kết bạn cho bạn.`,
+                ref_id: created._id.toString(),
+                ref_type: 'friend',
+                is_read: false,
+            });
+        } catch (e) {}
+
         return { message: 'Request sent', id: created._id };
     }
 
@@ -158,6 +176,25 @@ export class FriendsService {
         doc.status = 'accepted';
         doc.action_user_id = userId;
         await doc.save();
+
+        // Notify the original sender that request was accepted
+        try {
+            const senderId = actionId === u1 ? u1 : u2;
+            const acceptor = await this.usersService.findById(userId);
+            const acceptorName = (acceptor as any).full_name || (acceptor as any).username || 'Ai đó';
+            if (senderId && senderId !== userId) {
+                await this.notificationModel.create({
+                    user_id: senderId,
+                    sender_id: userId,
+                    type: 'friend_accepted',
+                    content: `${acceptorName} đã chấp nhận lời mời kết bạn của bạn.`,
+                    ref_id: requestId,
+                    ref_type: 'friend',
+                    is_read: false,
+                });
+            }
+        } catch (e) {}
+
         return { message: 'Accepted' };
     }
 

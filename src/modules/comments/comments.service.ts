@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Comment } from './schemas/comment.scheme';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { Notification } from '../notifications/schemas/notification.scheme';
 
 @Injectable()
 export class CommentsService {
@@ -10,6 +11,8 @@ export class CommentsService {
         @InjectModel(Comment.name) private commentModel: Model<Comment>,
         @InjectModel('User') private userModel: Model<any>,
         @InjectModel('Like') private likeModel: Model<any>,
+        @InjectModel(Notification.name) private notificationModel: Model<Notification>,
+        @InjectModel('Post') private postModel: Model<any>,
     ) { }
 
     async create(createCommentDto: CreateCommentDto): Promise<Comment> {
@@ -17,7 +20,12 @@ export class CommentsService {
             ...createCommentDto,
             likes_count: 0,
         });
-        return createdComment.save();
+        const saved = await createdComment.save();
+
+        // Send notification to post owner
+        await this.sendCommentNotification(createCommentDto);
+
+        return saved;
     }
 
     async findByPostId(postId: string, currentUserId?: string): Promise<any[]> {
@@ -64,6 +72,45 @@ export class CommentsService {
 
     async countByPostId(postId: string): Promise<number> {
         return this.commentModel.countDocuments({ post_id: postId }).exec();
+    }
+
+    private async sendCommentNotification(dto: CreateCommentDto) {
+        try {
+            const sender: any = await this.userModel.findById(dto.user_id).select('full_name username').lean().exec();
+            const senderName = sender?.full_name || sender?.username || 'Ai đó';
+
+            if (dto.parent_id) {
+                // Reply to a comment - notify the parent comment owner
+                const parentComment: any = await this.commentModel.findById(dto.parent_id).select('user_id').lean().exec();
+                if (parentComment && parentComment.user_id !== dto.user_id) {
+                    await this.notificationModel.create({
+                        user_id: parentComment.user_id,
+                        sender_id: dto.user_id,
+                        type: 'comment',
+                        content: `${senderName} đã trả lời bình luận của bạn.`,
+                        ref_id: dto.post_id,
+                        ref_type: 'post',
+                        is_read: false,
+                    });
+                }
+            }
+
+            // Notify post owner
+            const post: any = await this.postModel.findById(dto.post_id).select('user_id').lean().exec();
+            if (post && post.user_id !== dto.user_id) {
+                await this.notificationModel.create({
+                    user_id: post.user_id,
+                    sender_id: dto.user_id,
+                    type: 'comment',
+                    content: `${senderName} đã bình luận bài viết của bạn.`,
+                    ref_id: dto.post_id,
+                    ref_type: 'post',
+                    is_read: false,
+                });
+            }
+        } catch (e) {
+            // Don't fail the comment operation if notification fails
+        }
     }
 
     private async enrichCommentsWithUserInfo(comments: any[], currentUserId?: string): Promise<any[]> {

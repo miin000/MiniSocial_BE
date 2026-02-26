@@ -7,6 +7,7 @@ import { GroupMember, GroupMemberRole, GroupMemberStatus } from './schemas/group
 import { Post, PostStatus } from '../posts/schemas/post.scheme';
 import { User } from '../users/schemas/user.scheme';
 import { Like } from '../likes/schemas/like.scheme';
+import { Notification } from '../notifications/schemas/notification.scheme';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupPostDto } from './dto/create-group-post.dto';
@@ -19,8 +20,33 @@ export class GroupsService {
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(Like.name) private likeModel: Model<Like>,
+        @InjectModel(Notification.name) private notificationModel: Model<Notification>,
     ) { }
 
+    // Helper to create notification
+    private async notify(userId: string, senderId: string, type: string, content: string, refId?: string, refType?: string) {
+        try {
+            if (userId === senderId) return; // Don't notify self
+            await this.notificationModel.create({
+                user_id: userId, sender_id: senderId, type, content,
+                ref_id: refId, ref_type: refType, is_read: false,
+            });
+        } catch (e) {}
+    }
+
+    private async getUserName(userId: string): Promise<string> {
+        try {
+            const user = await this.userModel.findById(userId).select('full_name username').lean().exec();
+            return (user as any)?.full_name || (user as any)?.username || 'Ai đó';
+        } catch { return 'Ai đó'; }
+    }
+
+    private async getGroupName(groupId: string): Promise<string> {
+        try {
+            const group = await this.groupModel.findById(groupId).select('name').lean().exec();
+            return (group as any)?.name || 'nhóm';
+        } catch { return 'nhóm'; }
+    }
     async findGroupById(id: string): Promise<Group | null> {
         return this.groupModel.findById(id).exec();
     }
@@ -266,6 +292,18 @@ export class GroupsService {
             await this.groupModel
                 .findByIdAndUpdate(groupId, { $inc: { pending_members: 1 } })
                 .exec();
+            // Notify group admins about pending join request
+            const userName = await this.getUserName(userId);
+            const groupName = await this.getGroupName(groupId);
+            const admins = await this.groupMemberModel.find({
+                group_id: groupId,
+                role: { $in: [GroupMemberRole.ADMIN, GroupMemberRole.MODERATOR] },
+                status: GroupMemberStatus.ACTIVE,
+            }).exec();
+            for (const admin of admins) {
+                await this.notify(admin.user_id, userId, 'group_join',
+                    `${userName} yêu cầu tham gia nhóm ${groupName}.`, groupId, 'group');
+            }
         } else {
             await this.groupModel
                 .findByIdAndUpdate(groupId, { $inc: { members_count: 1 } })
@@ -334,6 +372,12 @@ export class GroupsService {
         await this.groupModel
             .findByIdAndUpdate(groupId, { $inc: { pending_members: 1 } })
             .exec();
+
+        // Notify invitee
+        const inviterName = await this.getUserName(inviterId);
+        const groupName = await this.getGroupName(groupId);
+        await this.notify(inviteeId, inviterId, 'group_invite',
+            `${inviterName} đã mời bạn tham gia nhóm ${groupName}.`, groupId, 'group');
             
         return member;
     }
@@ -414,6 +458,11 @@ export class GroupsService {
             })
             .exec();
 
+        // Notify approved member
+        const groupName = await this.getGroupName(groupId);
+        await this.notify(member.user_id, approverId, 'group_join',
+            `Yêu cầu tham gia nhóm ${groupName} của bạn đã được chấp nhận.`, groupId, 'group');
+
         return member;
     }
 
@@ -436,6 +485,11 @@ export class GroupsService {
         await this.groupModel
             .findByIdAndUpdate(groupId, { $inc: { pending_members: -1 } })
             .exec();
+
+        // Notify rejected member
+        const groupName = await this.getGroupName(groupId);
+        await this.notify(member.user_id, rejecterId, 'group_join',
+            `Yêu cầu tham gia nhóm ${groupName} của bạn đã bị từ chối.`, groupId, 'group');
     }
 
     // UC5.10: Remove member (mod/admin)
@@ -465,6 +519,11 @@ export class GroupsService {
                 .findByIdAndUpdate(groupId, { $inc: { members_count: -1 } })
                 .exec();
         }
+
+        // Notify removed member
+        const groupName = await this.getGroupName(groupId);
+        await this.notify(member.user_id, removerId, 'group_role',
+            `Bạn đã bị xóa khỏi nhóm ${groupName}.`, groupId, 'group');
     }
 
     // UC5.11: Get members list
@@ -512,6 +571,12 @@ export class GroupsService {
         if (!updatedMember) {
             throw new NotFoundException('Member not found');
         }
+
+        // Notify member about role change
+        const groupName = await this.getGroupName(groupId);
+        const roleName = newRole === GroupMemberRole.MODERATOR ? 'Quản trị viên' : 'Thành viên';
+        await this.notify(memberId, adminId, 'group_role',
+            `Vai trò của bạn trong nhóm ${groupName} đã được thay đổi thành ${roleName}.`, groupId, 'group');
         
         return updatedMember;
     }
@@ -543,6 +608,12 @@ export class GroupsService {
         await this.groupMemberModel
             .findByIdAndUpdate(newAdminMember._id, { role: GroupMemberRole.ADMIN })
             .exec();
+
+        // Notify new admin
+        const groupName = await this.getGroupName(groupId);
+        const currentAdminName = await this.getUserName(currentAdminId);
+        await this.notify(newAdminId, currentAdminId, 'group_role',
+            `${currentAdminName} đã chuyển quyền quản trị nhóm ${groupName} cho bạn.`, groupId, 'group');
     }
 
     // ============ GROUP POSTS (using unified Post model) ============
@@ -581,6 +652,18 @@ export class GroupsService {
             await this.groupModel
                 .findByIdAndUpdate(groupId, { $inc: { pending_posts: 1 } })
                 .exec();
+            // Notify admins/mods about pending post
+            const userName = await this.getUserName(userId);
+            const groupName = await this.getGroupName(groupId);
+            const admins = await this.groupMemberModel.find({
+                group_id: groupId,
+                role: { $in: [GroupMemberRole.ADMIN, GroupMemberRole.MODERATOR] },
+                status: GroupMemberStatus.ACTIVE,
+            }).exec();
+            for (const admin of admins) {
+                await this.notify(admin.user_id, userId, 'group_join',
+                    `${userName} đã đăng bài mới trong nhóm ${groupName} và đang chờ duyệt.`, groupId, 'group');
+            }
         }
 
         return post;
@@ -699,6 +782,11 @@ export class GroupsService {
         await this.groupModel
             .findByIdAndUpdate(groupId, { $inc: { pending_posts: -1 } })
             .exec();
+
+        // Notify post author about approval
+        const groupName = await this.getGroupName(groupId);
+        await this.notify(post.user_id, approverId, 'group_join',
+            `Bài viết của bạn trong nhóm ${groupName} đã được duyệt.`, groupId, 'group');
             
         return post;
     }
@@ -731,6 +819,12 @@ export class GroupsService {
         await this.groupModel
             .findByIdAndUpdate(groupId, { $inc: { pending_posts: -1 } })
             .exec();
+
+        // Notify post author about rejection
+        const groupName = await this.getGroupName(groupId);
+        const reasonText = reason ? ` Lý do: ${reason}` : '';
+        await this.notify(post.user_id, rejecterId, 'group_join',
+            `Bài viết của bạn trong nhóm ${groupName} đã bị từ chối.${reasonText}`, groupId, 'group');
     }
 
     // UC5.7: Delete post (mod/admin or post owner)
