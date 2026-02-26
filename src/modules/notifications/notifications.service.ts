@@ -39,6 +39,10 @@ export class NotificationsService {
     // Get all notifications for a user (paginated)
     async findAllByUser(userId: string, page: number = 1, limit: number = 20) {
         const skip = (page - 1) * limit;
+        console.log('[NotificationsService] findAllByUser userId:', userId, 'type:', typeof userId);
+        // Debug: count all docs first
+        const totalAll = await this.notificationModel.countDocuments({});
+        console.log('[NotificationsService] Total docs in collection:', totalAll);
         const [notifications, total] = await Promise.all([
             this.notificationModel
                 .find({ user_id: userId })
@@ -48,6 +52,7 @@ export class NotificationsService {
                 .exec(),
             this.notificationModel.countDocuments({ user_id: userId }),
         ]);
+        console.log('[NotificationsService] Found', total, 'notifications for user', userId);
 
         return {
             data: notifications,

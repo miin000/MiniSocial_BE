@@ -15,6 +15,8 @@ export class NotificationsController {
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
   ) {
+    console.log('[NotifController] req.user:', JSON.stringify(req.user));
+    console.log('[NotifController] userId:', req.user.userId, '| sub:', req.user.sub, '| user_id:', req.user.user_id);
     return this.notificationsService.findAllByUser(
       req.user.userId,
       parseInt(page),
