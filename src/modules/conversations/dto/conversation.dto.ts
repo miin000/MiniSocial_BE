@@ -1,16 +1,18 @@
 import { IsString, IsOptional, IsArray, IsEnum, ArrayMinSize } from 'class-validator';
 
 export class CreatePrivateConversationDto {
+    @IsOptional()
     @IsString()
-    creator_id: string;
+    creator_id?: string;
 
     @IsString()
     friend_id: string; // Chỉ chat 1-1 với bạn bè
 }
 
 export class CreateGroupConversationDto {
+    @IsOptional()
     @IsString()
-    creator_id: string;
+    creator_id?: string;
 
     @IsString()
     name: string;

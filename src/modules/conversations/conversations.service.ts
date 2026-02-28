@@ -1,7 +1,7 @@
 ﻿
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Conversation, ConversationType } from './schemas/conversation.scheme';
 import { ConversationParticipant, ParticipantRole } from '../conversation-participants/schemas/conversation-participants.scheme';
 import { Friend } from '../friends/schemas/friend.scheme';
@@ -10,6 +10,8 @@ import { FirebaseService } from '../../common/services/firebase.service';
 
 @Injectable()
 export class ConversationsService {
+    private readonly logger = new Logger(ConversationsService.name);
+
     constructor(
         @InjectModel(Conversation.name) private conversationModel: Model<Conversation>,
         @InjectModel(ConversationParticipant.name) private participantModel: Model<ConversationParticipant>,
@@ -165,14 +167,33 @@ export class ConversationsService {
 
     // ── Helper: kiểm tra bạn bè ────────────────────────────────────────────
     private async checkFriends(userId1: string, userId2: string): Promise<boolean> {
+        const id1 = userId1.toString();
+        const id2 = userId2.toString();
         const doc = await this.friendModel.findOne({
             status: 'accepted',
             $or: [
-                { user_id_1: userId1, user_id_2: userId2 },
-                { user_id_1: userId2, user_id_2: userId1 },
+                { user_id_1: id1, user_id_2: id2 },
+                { user_id_1: id2, user_id_2: id1 },
             ],
         }).exec();
-        return !!doc;
+        if (doc) return true;
+        // Fallback: try ObjectId comparison in case IDs stored inconsistently
+        try {
+            const oid1 = new Types.ObjectId(id1);
+            const oid2 = new Types.ObjectId(id2);
+            const doc2 = await this.friendModel.findOne({
+                status: 'accepted',
+                $or: [
+                    { user_id_1: oid1, user_id_2: oid2 },
+                    { user_id_1: oid2, user_id_2: oid1 },
+                    { user_id_1: oid1, user_id_2: id2 },
+                    { user_id_1: oid2, user_id_2: id1 },
+                    { user_id_1: id1, user_id_2: oid2 },
+                    { user_id_1: id2, user_id_2: oid1 },
+                ],
+            }).exec();
+            return !!doc2;
+        } catch { return false; }
     }
 
     // ── Helper: tìm cuộc trò chuyện riêng đã tồn tại ───────────────────────
@@ -220,8 +241,13 @@ export class ConversationsService {
             .exec();
 
         const userIds = participants.map(p => p.user_id);
+        // Convert string IDs to ObjectId for query (user._id is ObjectId)
+        const objectIds = userIds
+            .map(id => { try { return new Types.ObjectId(id.toString()); } catch { return null; } })
+            .filter(id => id !== null);
+
         const users = await this.userModel
-            .find({ _id: { $in: userIds } })
+            .find({ _id: { $in: objectIds } })
             .select('_id full_name username avatar_url')
             .lean()
             .exec();
@@ -231,19 +257,18 @@ export class ConversationsService {
         // Đối tác trong private chat
         let partner: any = null;
         if (conv.type === ConversationType.PRIVATE || conv.type === 'private') {
-            const partnerId = userIds.find(id => id !== currentUserId);
-            partner = partnerId ? userMap.get(partnerId) : null;
+            const partnerId = userIds.find(id => id.toString() !== currentUserId.toString());
+            partner = partnerId ? userMap.get(partnerId.toString()) : null;
         }
 
         // Unread count
-        const myPart = participants.find(p => p.user_id === currentUserId);
-        // (Để đơn giản, unread_count sẽ tính ở frontend hoặc bổ sung sau)
+        const myPart = participants.find(p => p.user_id.toString() === currentUserId.toString());
 
         return {
             ...conv,
             participants: participants.map(p => ({
                 ...p,
-                user_info: userMap.get(p.user_id) || null,
+                user_info: userMap.get(p.user_id.toString()) || null,
             })),
             partner_info: partner ? {
                 _id: (partner as any)._id,

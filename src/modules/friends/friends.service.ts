@@ -18,29 +18,34 @@ export class FriendsService {
 
     // List accepted friends for a user
     async getFriends(userId: string) {
+        const uid = userId.toString();
         const docs = await this.friendModel
             .find({
                 status: 'accepted',
-                $or: [{ user_id_1: userId }, { user_id_2: userId }],
+                $or: [{ user_id_1: uid }, { user_id_2: uid }],
             })
             .exec();
 
-        const results = await Promise.all(
-            docs.map(async (d) => {
-                const otherId = d.user_id_1.toString() === userId ? d.user_id_2 : d.user_id_1;
-                try {
-                    const user = await this.usersService.findById(otherId);
-                    return {
-                        id: user._id,
-                        fullName: (user as any).full_name || (user as any).fullName || (user as any).username,
-                        avatar: (user as any).avatar || (user as any).avatar_url,
-                    };
-                } catch (e) {
-                    this.logger.warn(`Could not load user ${otherId}: ${e}`);
-                    return { id: otherId };
-                }
-            }),
-        );
+        const seen = new Set<string>();
+        const results: any[] = [];
+
+        for (const d of docs) {
+            const otherId = d.user_id_1.toString() === uid ? d.user_id_2.toString() : d.user_id_1.toString();
+            if (seen.has(otherId)) continue; // deduplicate
+            seen.add(otherId);
+            try {
+                const user = await this.usersService.findById(otherId);
+                results.push({
+                    id: user._id,
+                    fullName: (user as any).full_name || (user as any).fullName || (user as any).username,
+                    avatar: (user as any).avatar_url || (user as any).avatar,
+                    avatar_url: (user as any).avatar_url || (user as any).avatar,
+                    username: (user as any).username,
+                });
+            } catch (e) {
+                this.logger.warn(`Could not load user ${otherId}: ${e}`);
+            }
+        }
 
         return results;
     }
