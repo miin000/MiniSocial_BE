@@ -16,6 +16,7 @@ export class MessagesService {
         @InjectModel(Message.name) private messageModel: Model<Message>,
         @InjectModel(ConversationParticipant.name) private participantModel: Model<ConversationParticipant>,
         @InjectModel('User') private userModel: Model<any>,
+        @InjectModel('Post') private postModel: Model<any>,
         private readonly conversationsService: ConversationsService,
         private readonly firebaseService: FirebaseService,
         private readonly userInteractionsService: UserInteractionsService,
@@ -192,6 +193,30 @@ export class MessagesService {
             }
         }
 
+        // Nếu là share_post, lấy thông tin bài viết
+        let sharedPostInfo: any = null;
+        if (obj.shared_post_id && obj.message_type === MessageType.SHARE_POST) {
+            const post = await this.postModel.findById(obj.shared_post_id).lean().exec();
+            if (post) {
+                const postAuthor = await this.userModel
+                    .findById((post as any).user_id)
+                    .select('_id full_name username avatar_url')
+                    .lean()
+                    .exec();
+                sharedPostInfo = {
+                    _id: (post as any)._id,
+                    content: (post as any).content,
+                    media_urls: (post as any).media_urls || [],
+                    user_name: (postAuthor as any)?.full_name || (postAuthor as any)?.username || 'Ẩn danh',
+                    user_avatar: (postAuthor as any)?.avatar_url || null,
+                    likes_count: (post as any).likes_count || 0,
+                    comments_count: (post as any).comments_count || 0,
+                    tags: (post as any).tags || [],
+                    created_at: (post as any).created_at,
+                };
+            }
+        }
+
         // Nếu đã thu hồi, giấu nội dung
         if (obj.is_recalled) {
             return {
@@ -202,6 +227,7 @@ export class MessagesService {
                 file_name: null,
                 sender_info: sender,
                 reply_to: replyTo,
+                shared_post_info: null,
             };
         }
 
@@ -209,6 +235,7 @@ export class MessagesService {
             ...obj,
             sender_info: sender,
             reply_to: replyTo,
+            shared_post_info: sharedPostInfo,
         };
     }
 

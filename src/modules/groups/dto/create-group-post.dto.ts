@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsArray, MaxLength, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 
 export class CreateGroupPostDto {
   @IsString()
@@ -13,4 +13,11 @@ export class CreateGroupPostDto {
   @IsOptional()
   @IsString()
   content_type?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(3)
+  @IsString({ each: true })
+  tags?: string[];
 }

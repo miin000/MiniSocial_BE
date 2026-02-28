@@ -6,6 +6,7 @@ import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
 import { ConversationParticipant, ConversationParticipantSchema } from '../conversation-participants/schemas/conversation-participants.scheme';
 import { UserSchema } from '../users/schemas/user.scheme';
+import { PostSchema } from '../posts/schemas/post.scheme';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { UserInteractionsModule } from '../user-interactions/user-interactions.module';
 import { FirebaseService } from '../../common/services/firebase.service';
@@ -16,6 +17,7 @@ import { FirebaseService } from '../../common/services/firebase.service';
       { name: Message.name, schema: MessageSchema },
       { name: ConversationParticipant.name, schema: ConversationParticipantSchema },
       { name: 'User', schema: UserSchema },
+      { name: 'Post', schema: PostSchema },
     ]),
     forwardRef(() => ConversationsModule),
     UserInteractionsModule,
