@@ -22,9 +22,10 @@ export class ConversationsService {
 
     // ── Tạo cuộc trò chuyện riêng (1-1) ───────────────────────────────────
     async createPrivate(dto: CreatePrivateConversationDto): Promise<any> {
+        const creatorId = dto.creator_id!;
         // Kiểm tra đã bạn bè hoặc đã có conversation cũ
-        const areFriends = await this.checkFriends(dto.creator_id, dto.friend_id);
-        const existingConv = await this.findExistingPrivate(dto.creator_id, dto.friend_id);
+        const areFriends = await this.checkFriends(creatorId, dto.friend_id);
+        const existingConv = await this.findExistingPrivate(creatorId, dto.friend_id);
 
         if (existingConv) {
             // Nếu đã có conversation trước đó (kể cả hủy kết bạn rồi), tái sử dụng
@@ -37,35 +38,36 @@ export class ConversationsService {
 
         const conv = new this.conversationModel({
             type: ConversationType.PRIVATE,
-            creator_id: dto.creator_id,
+            creator_id: creatorId,
         });
         const saved = await conv.save();
 
         // Thêm 2 thành viên
         await this.participantModel.insertMany([
-            { conv_id: saved._id.toString(), user_id: dto.creator_id, role: ParticipantRole.MEMBER, joined_at: new Date() },
+            { conv_id: saved._id.toString(), user_id: creatorId, role: ParticipantRole.MEMBER, joined_at: new Date() },
             { conv_id: saved._id.toString(), user_id: dto.friend_id, role: ParticipantRole.MEMBER, joined_at: new Date() },
         ]);
 
-        return this.enrichConversation(saved, dto.creator_id);
+        return this.enrichConversation(saved, creatorId);
     }
 
     // ── Tạo nhóm chat ──────────────────────────────────────────────────────
     async createGroup(dto: CreateGroupConversationDto): Promise<any> {
+        const creatorId = dto.creator_id!;
         const conv = new this.conversationModel({
             type: ConversationType.GROUP,
             name: dto.name,
             avatar_url: dto.avatar_url,
-            creator_id: dto.creator_id,
+            creator_id: creatorId,
         });
         const saved = await conv.save();
         const convId = saved._id.toString();
 
         // Người tạo = leader
         const participants = [
-            { conv_id: convId, user_id: dto.creator_id, role: ParticipantRole.LEADER, joined_at: new Date() },
+            { conv_id: convId, user_id: creatorId, role: ParticipantRole.LEADER, joined_at: new Date() },
             ...dto.participant_ids
-                .filter(id => id !== dto.creator_id)
+                .filter(id => id !== creatorId)
                 .map(id => ({
                     conv_id: convId,
                     user_id: id,
@@ -75,7 +77,7 @@ export class ConversationsService {
         ];
         await this.participantModel.insertMany(participants);
 
-        return this.enrichConversation(saved, dto.creator_id);
+        return this.enrichConversation(saved, creatorId);
     }
 
     // ── Danh sách cuộc trò chuyện của user ──────────────────────────────────
