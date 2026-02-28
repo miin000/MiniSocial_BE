@@ -1,5 +1,5 @@
 ﻿// src/auth/auth.service.ts
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
@@ -8,6 +8,8 @@ import { UsersService } from 'modules/users/users.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -50,13 +52,15 @@ export class AuthService {
       : await this.usersService.findOneByUsername(normalized);
 
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      this.logger.warn(`Login failed: user not found for identifier="${normalized}"`);
+      throw new UnauthorizedException('Tài khoản không tồn tại');
     }
 
     // 3) So sánh mật khẩu
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      throw new UnauthorizedException('Invalid credentials');
+      this.logger.warn(`Login failed: wrong password for identifier="${normalized}"`);
+      throw new UnauthorizedException('Mật khẩu không đúng');
     }
 
     // 4) Tạo JWT (nên dùng key thống nhất)

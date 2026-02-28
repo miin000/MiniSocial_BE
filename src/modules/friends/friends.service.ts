@@ -91,13 +91,26 @@ export class FriendsService {
         // Set of current user's friends
         const userFriends = adjacency.get(uid) || new Set<string>();
 
-        // fetch all users and exclude self and existing friends
+        // Also collect users with pending requests (either direction) to exclude them
+        const pendingDocs = await this.friendModel.find({
+            status: 'pending',
+            $or: [{ user_id_1: uid }, { user_id_2: uid }],
+        }).exec();
+        const pendingIds = new Set<string>(
+            pendingDocs.map((d) => {
+                const u1 = d.user_id_1.toString();
+                const u2 = d.user_id_2.toString();
+                return u1 === uid ? u2 : u1;
+            }),
+        );
+
+        // fetch all users and exclude self, existing friends, and pending requests
         const allUsers = await this.usersService.findAll();
 
         const candidates = (allUsers as any[])
             .filter((u) => {
                 const id = u._id.toString();
-                return id !== uid && !userFriends.has(id);
+                return id !== uid && !userFriends.has(id) && !pendingIds.has(id);
             })
             .map((u) => {
                 const id = u._id.toString();
