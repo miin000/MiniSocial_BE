@@ -6,6 +6,8 @@ import { PostsService } from './posts.service';
 import { UserSchema } from '../users/schemas/user.scheme';
 import { LikeSchema } from '../likes/schemas/like.scheme';
 import { FriendSchema } from '../friends/schemas/friend.scheme';
+import { CategoriesModule } from '../categories/categories.module';
+import { UserInteractionsModule } from '../user-interactions/user-interactions.module';
 
 @Module({
   imports: [
@@ -14,7 +16,9 @@ import { FriendSchema } from '../friends/schemas/friend.scheme';
       { name: 'User', schema: UserSchema },
       { name: 'Like', schema: LikeSchema },
       { name: 'Friend', schema: FriendSchema },
-    ])
+    ]),
+    CategoriesModule,
+    UserInteractionsModule,
   ],
 
   controllers: [PostsController],

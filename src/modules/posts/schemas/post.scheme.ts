@@ -60,6 +60,14 @@ export class Post {
     @Prop({ default: 0 })
     shares_count: number;
 
+    @Prop({ default: 0 })
+    view_count: number;
+
+    // Chủ đề bài viết – bắt buộc chọn 1-3 tag khi tạo bài
+    // Lưu slug của category, VD: ["technology", "gaming"]
+    @Prop({ type: [String], default: [] })
+    tags: string[];
+
     created_at: Date;
     updated_at: Date;
 }

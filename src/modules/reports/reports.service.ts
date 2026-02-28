@@ -7,6 +7,8 @@ import { CreateReportDto, ResolveReportDto } from './dto/create-report.dto';
 import { Post, PostStatus } from '../posts/schemas/post.scheme';
 import { User, UserStatus } from '../users/schemas/user.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
+import { UserInteractionsService } from '../user-interactions/user-interactions.service';
+import { InteractionType } from '../user-interactions/schemas/user-interaction.schema';
 
 @Injectable()
 export class ReportsService {
@@ -15,6 +17,7 @@ export class ReportsService {
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel(User.name) private userModel: Model<User>,
         private readonly firebaseService: FirebaseService,
+        private readonly userInteractionsService: UserInteractionsService,
     ) { }
 
     async create(createReportDto: CreateReportDto): Promise<Report> {
@@ -22,6 +25,19 @@ export class ReportsService {
             ...createReportDto,
             status: ReportStatus.PENDING,
         });
+
+        // Ghi interaction REPORT (weight âm) → hệ thống khuyến nghị giảm đề xuất
+        // bài viết tương tự cho người báo cáo
+        if (createReportDto.reported_post_id) {
+            try {
+                await this.userInteractionsService.record({
+                    user_id: createReportDto.reporter_id,
+                    post_id: createReportDto.reported_post_id,
+                    interaction_type: InteractionType.REPORT,
+                });
+            } catch { }
+        }
+
         return createdReport.save();
     }
 

@@ -1,9 +1,12 @@
-﻿import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+﻿import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Post, PostVisibility, PostStatus } from './schemas/post.scheme';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
+import { CategoriesService } from '../categories/categories.service';
+import { UserInteractionsService } from '../user-interactions/user-interactions.service';
+import { InteractionType } from '../user-interactions/schemas/user-interaction.schema';
 
 @Injectable()
 export class PostsService {
@@ -12,20 +15,40 @@ export class PostsService {
         @InjectModel('User') private userModel: Model<any>,
         @InjectModel('Like') private likeModel: Model<any>,
         @InjectModel('Friend') private friendModel: Model<any>,
+        private readonly categoriesService: CategoriesService,
+        private readonly userInteractionsService: UserInteractionsService,
     ) { }
 
     async create(createPostDto: CreatePostDto): Promise<Post> {
+        // Validate tags bắt buộc 1–3 tag
+        if (!createPostDto.tags || createPostDto.tags.length === 0) {
+            throw new BadRequestException('Please select at least 1 topic tag for your post');
+        }
+        if (createPostDto.tags.length > 3) {
+            throw new BadRequestException('You can select at most 3 topic tags');
+        }
+        const validSlugs = await this.categoriesService.getValidSlugs();
+        const invalidTags = createPostDto.tags.filter((t) => !validSlugs.includes(t));
+        if (invalidTags.length > 0) {
+            throw new BadRequestException(`Invalid tags: ${invalidTags.join(', ')}`);
+        }
+
         const isGroupPost = !!createPostDto.group_id;
         const createdPost = new this.postModel({
             ...createPostDto,
             visibility: createPostDto.visibility || PostVisibility.PUBLIC,
-            // Group posts that need approval start as 'pending'; others start as 'active'
             status: isGroupPost ? PostStatus.PENDING : PostStatus.ACTIVE,
             likes_count: 0,
             comments_count: 0,
             shares_count: 0,
+            view_count: 0,
         });
-        return createdPost.save();
+        const saved = await createdPost.save();
+
+        // Cập nhật post_count cho các category
+        await this.categoriesService.incrementPostCount(createPostDto.tags);
+
+        return saved;
     }
 
     // Create group post with auto-approve logic
@@ -84,7 +107,18 @@ export class PostsService {
         if (!post) {
             throw new NotFoundException(`Post with ID ${id} not found`);
         }
-        
+
+        // Ghi view interaction cho hệ thống khuyến nghị
+        if (currentUserId) {
+            await this.userInteractionsService.record({
+                user_id: currentUserId,
+                post_id: id,
+                interaction_type: InteractionType.VIEW,
+            });
+            // Tăng view_count
+            await this.postModel.findByIdAndUpdate(id, { $inc: { view_count: 1 } }).exec();
+        }
+
         const enrichedPosts = await this.enrichPostsWithUserInfo([post], currentUserId);
         return enrichedPosts[0];
     }

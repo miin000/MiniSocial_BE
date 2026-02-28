@@ -22,6 +22,8 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from 'modules/auth/auth.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { CategoriesModule } from './modules/categories/categories.module';
+import { UserInteractionsModule } from './modules/user-interactions/user-interactions.module';
 
 @Module({
   imports: [
@@ -59,6 +61,8 @@ import { ReportsModule } from './modules/reports/reports.module';
     LikesModule,
     MessagesModule,
     ReportsModule,
+    CategoriesModule,
+    UserInteractionsModule,
     
     // Serve static files from uploads directory (must be last)
     ServeStaticModule.forRoot({

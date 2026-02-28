@@ -1,12 +1,257 @@
 ﻿
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Conversation } from './schemas/conversation.scheme';
+import { Conversation, ConversationType } from './schemas/conversation.scheme';
+import { ConversationParticipant, ParticipantRole } from '../conversation-participants/schemas/conversation-participants.scheme';
+import { Friend } from '../friends/schemas/friend.scheme';
+import { CreatePrivateConversationDto, CreateGroupConversationDto, UpdateConversationDto } from './dto/conversation.dto';
+import { FirebaseService } from '../../common/services/firebase.service';
 
 @Injectable()
 export class ConversationsService {
     constructor(
         @InjectModel(Conversation.name) private conversationModel: Model<Conversation>,
+        @InjectModel(ConversationParticipant.name) private participantModel: Model<ConversationParticipant>,
+        @InjectModel('Friend') private friendModel: Model<Friend>,
+        @InjectModel('User') private userModel: Model<any>,
+        private readonly firebaseService: FirebaseService,
     ) { }
+
+    // ── Tạo cuộc trò chuyện riêng (1-1) ───────────────────────────────────
+    async createPrivate(dto: CreatePrivateConversationDto): Promise<any> {
+        // Kiểm tra đã bạn bè hoặc đã có conversation cũ
+        const areFriends = await this.checkFriends(dto.creator_id, dto.friend_id);
+        const existingConv = await this.findExistingPrivate(dto.creator_id, dto.friend_id);
+
+        if (existingConv) {
+            // Nếu đã có conversation trước đó (kể cả hủy kết bạn rồi), tái sử dụng
+            return existingConv;
+        }
+
+        if (!areFriends) {
+            throw new BadRequestException('Bạn chỉ có thể nhắn tin với bạn bè');
+        }
+
+        const conv = new this.conversationModel({
+            type: ConversationType.PRIVATE,
+            creator_id: dto.creator_id,
+        });
+        const saved = await conv.save();
+
+        // Thêm 2 thành viên
+        await this.participantModel.insertMany([
+            { conv_id: saved._id.toString(), user_id: dto.creator_id, role: ParticipantRole.MEMBER, joined_at: new Date() },
+            { conv_id: saved._id.toString(), user_id: dto.friend_id, role: ParticipantRole.MEMBER, joined_at: new Date() },
+        ]);
+
+        return this.enrichConversation(saved, dto.creator_id);
+    }
+
+    // ── Tạo nhóm chat ──────────────────────────────────────────────────────
+    async createGroup(dto: CreateGroupConversationDto): Promise<any> {
+        const conv = new this.conversationModel({
+            type: ConversationType.GROUP,
+            name: dto.name,
+            avatar_url: dto.avatar_url,
+            creator_id: dto.creator_id,
+        });
+        const saved = await conv.save();
+        const convId = saved._id.toString();
+
+        // Người tạo = leader
+        const participants = [
+            { conv_id: convId, user_id: dto.creator_id, role: ParticipantRole.LEADER, joined_at: new Date() },
+            ...dto.participant_ids
+                .filter(id => id !== dto.creator_id)
+                .map(id => ({
+                    conv_id: convId,
+                    user_id: id,
+                    role: ParticipantRole.MEMBER,
+                    joined_at: new Date(),
+                })),
+        ];
+        await this.participantModel.insertMany(participants);
+
+        return this.enrichConversation(saved, dto.creator_id);
+    }
+
+    // ── Danh sách cuộc trò chuyện của user ──────────────────────────────────
+    async findByUser(userId: string): Promise<any[]> {
+        // Lấy tất cả conv_id mà user tham gia (chưa rời)
+        const parts = await this.participantModel
+            .find({ user_id: userId, left_at: null })
+            .select('conv_id')
+            .lean()
+            .exec();
+
+        const convIds = parts.map(p => p.conv_id);
+        if (convIds.length === 0) return [];
+
+        const convs = await this.conversationModel
+            .find({ _id: { $in: convIds } })
+            .sort({ last_message_at: -1, updated_at: -1 })
+            .lean()
+            .exec();
+
+        return Promise.all(convs.map(c => this.enrichConversation(c, userId)));
+    }
+
+    // ── Chi tiết conversation ───────────────────────────────────────────────
+    async findById(convId: string, userId: string): Promise<any> {
+        const conv = await this.conversationModel.findById(convId).lean().exec();
+        if (!conv) throw new NotFoundException('Cuộc trò chuyện không tồn tại');
+
+        // Kiểm tra user có trong conversation không
+        const participant = await this.participantModel.findOne({
+            conv_id: convId, user_id: userId, left_at: null,
+        }).lean().exec();
+        if (!participant) throw new ForbiddenException('Bạn không thuộc cuộc trò chuyện này');
+
+        return this.enrichConversation(conv, userId);
+    }
+
+    // ── Sửa thông tin nhóm (tên, avatar) ───────────────────────────────────
+    async updateGroup(convId: string, userId: string, dto: UpdateConversationDto): Promise<Conversation> {
+        const conv = await this.conversationModel.findById(convId).exec();
+        if (!conv) throw new NotFoundException('Cuộc trò chuyện không tồn tại');
+        if (conv.type !== ConversationType.GROUP) throw new BadRequestException('Chỉ có thể sửa nhóm chat');
+
+        // Kiểm tra quyền: leader hoặc admin
+        await this.requireRole(convId, userId, [ParticipantRole.LEADER, ParticipantRole.ADMIN]);
+
+        if (dto.name !== undefined) conv.name = dto.name;
+        if (dto.avatar_url !== undefined) conv.avatar_url = dto.avatar_url;
+        return conv.save();
+    }
+
+    // ── Xóa cuộc trò chuyện ────────────────────────────────────────────────
+    async deleteConversation(convId: string, userId: string): Promise<void> {
+        const conv = await this.conversationModel.findById(convId).exec();
+        if (!conv) throw new NotFoundException('Cuộc trò chuyện không tồn tại');
+
+        if (conv.type === ConversationType.GROUP) {
+            // Nhóm: chỉ leader mới xóa
+            await this.requireRole(convId, userId, [ParticipantRole.LEADER]);
+        } else {
+            // Private: bất kỳ ai trong cuộc trò chuyện
+            const p = await this.participantModel.findOne({ conv_id: convId, user_id: userId }).exec();
+            if (!p) throw new ForbiddenException('Bạn không thuộc cuộc trò chuyện này');
+        }
+
+        await this.conversationModel.findByIdAndDelete(convId).exec();
+        await this.participantModel.deleteMany({ conv_id: convId }).exec();
+        // Messages cũng xóa theo
+        // (để MessagesService xử lý hoặc cascade ở đây)
+    }
+
+    // ── Cập nhật last message cache ─────────────────────────────────────────
+    async updateLastMessage(convId: string, messageId: string, content: string, senderId: string): Promise<void> {
+        await this.conversationModel.findByIdAndUpdate(convId, {
+            last_message_id: messageId,
+            last_message_content: content,
+            last_message_at: new Date(),
+            last_message_sender_id: senderId,
+        }).exec();
+    }
+
+    // ── Đánh dấu đã đọc ────────────────────────────────────────────────────
+    async markAsRead(convId: string, userId: string): Promise<void> {
+        await this.participantModel.findOneAndUpdate(
+            { conv_id: convId, user_id: userId, left_at: null },
+            { last_read_at: new Date() },
+        ).exec();
+    }
+
+    // ── Helper: kiểm tra bạn bè ────────────────────────────────────────────
+    private async checkFriends(userId1: string, userId2: string): Promise<boolean> {
+        const doc = await this.friendModel.findOne({
+            status: 'accepted',
+            $or: [
+                { user_id_1: userId1, user_id_2: userId2 },
+                { user_id_1: userId2, user_id_2: userId1 },
+            ],
+        }).exec();
+        return !!doc;
+    }
+
+    // ── Helper: tìm cuộc trò chuyện riêng đã tồn tại ───────────────────────
+    private async findExistingPrivate(userId1: string, userId2: string): Promise<any | null> {
+        const parts1 = await this.participantModel.find({ user_id: userId1 }).select('conv_id').lean().exec();
+        const convIds1 = parts1.map(p => p.conv_id);
+
+        if (convIds1.length === 0) return null;
+
+        const parts2 = await this.participantModel.findOne({
+            user_id: userId2,
+            conv_id: { $in: convIds1 },
+        }).lean().exec();
+
+        if (!parts2) return null;
+
+        const conv = await this.conversationModel.findOne({
+            _id: parts2.conv_id,
+            type: ConversationType.PRIVATE,
+        }).lean().exec();
+
+        return conv ? this.enrichConversation(conv, userId1) : null;
+    }
+
+    // ── Helper: kiểm tra vai trò ────────────────────────────────────────────
+    async requireRole(convId: string, userId: string, allowedRoles: ParticipantRole[]): Promise<ConversationParticipant> {
+        const p = await this.participantModel.findOne({
+            conv_id: convId, user_id: userId, left_at: null,
+        }).exec();
+        if (!p) throw new ForbiddenException('Bạn không thuộc cuộc trò chuyện này');
+        if (!allowedRoles.includes(p.role as ParticipantRole)) {
+            throw new ForbiddenException('Bạn không có quyền thực hiện hành động này');
+        }
+        return p;
+    }
+
+    // ── Helper: enrich conversation với thông tin user + unread count ────────
+    private async enrichConversation(conv: any, currentUserId: string): Promise<any> {
+        const convId = (conv._id || conv.id).toString();
+
+        // Lấy danh sách thành viên
+        const participants = await this.participantModel
+            .find({ conv_id: convId, left_at: null })
+            .lean()
+            .exec();
+
+        const userIds = participants.map(p => p.user_id);
+        const users = await this.userModel
+            .find({ _id: { $in: userIds } })
+            .select('_id full_name username avatar_url')
+            .lean()
+            .exec();
+
+        const userMap = new Map(users.map(u => [(u as any)._id.toString(), u]));
+
+        // Đối tác trong private chat
+        let partner: any = null;
+        if (conv.type === ConversationType.PRIVATE || conv.type === 'private') {
+            const partnerId = userIds.find(id => id !== currentUserId);
+            partner = partnerId ? userMap.get(partnerId) : null;
+        }
+
+        // Unread count
+        const myPart = participants.find(p => p.user_id === currentUserId);
+        // (Để đơn giản, unread_count sẽ tính ở frontend hoặc bổ sung sau)
+
+        return {
+            ...conv,
+            participants: participants.map(p => ({
+                ...p,
+                user_info: userMap.get(p.user_id) || null,
+            })),
+            partner_info: partner ? {
+                _id: (partner as any)._id,
+                full_name: (partner as any).full_name,
+                username: (partner as any).username,
+                avatar_url: (partner as any).avatar_url,
+            } : null,
+            member_count: participants.length,
+        };
+    }
 }

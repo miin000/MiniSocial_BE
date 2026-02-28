@@ -4,6 +4,8 @@ import { Model } from 'mongoose';
 import { Like } from './schemas/like.scheme';
 import { CreateLikeDto } from './dto/create-like.dto';
 import { FirebaseService } from '../../common/services/firebase.service';
+import { UserInteractionsService } from '../user-interactions/user-interactions.service';
+import { InteractionType } from '../user-interactions/schemas/user-interaction.schema';
 
 @Injectable()
 export class LikesService {
@@ -13,6 +15,7 @@ export class LikesService {
         @InjectModel('Post') private postModel: Model<any>,
         @InjectModel('Comment') private commentModel: Model<any>,
         private readonly firebaseService: FirebaseService,
+        private readonly userInteractionsService: UserInteractionsService,
     ) { }
 
     async toggleLike(createLikeDto: CreateLikeDto): Promise<{ liked: boolean, like?: Like }> {
@@ -34,6 +37,15 @@ export class LikesService {
             // Like
             const newLike = new this.likeModel(createLikeDto);
             const savedLike = await newLike.save();
+
+            // Ghi interaction cho hệ thống khuyến nghị (chỉ ghi khi like bài viết)
+            if (createLikeDto.post_id) {
+                await this.userInteractionsService.record({
+                    user_id: createLikeDto.user_id,
+                    post_id: createLikeDto.post_id,
+                    interaction_type: InteractionType.LIKE,
+                });
+            }
 
             // Send notification to post/comment owner
             await this.sendLikeNotification(createLikeDto);

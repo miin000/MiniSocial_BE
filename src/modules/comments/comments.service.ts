@@ -4,6 +4,8 @@ import { Model } from 'mongoose';
 import { Comment } from './schemas/comment.scheme';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { FirebaseService } from '../../common/services/firebase.service';
+import { UserInteractionsService } from '../user-interactions/user-interactions.service';
+import { InteractionType } from '../user-interactions/schemas/user-interaction.schema';
 
 @Injectable()
 export class CommentsService {
@@ -13,6 +15,7 @@ export class CommentsService {
         @InjectModel('Like') private likeModel: Model<any>,
         @InjectModel('Post') private postModel: Model<any>,
         private readonly firebaseService: FirebaseService,
+        private readonly userInteractionsService: UserInteractionsService,
     ) { }
 
     async create(createCommentDto: CreateCommentDto): Promise<Comment> {
@@ -21,6 +24,15 @@ export class CommentsService {
             likes_count: 0,
         });
         const saved = await createdComment.save();
+
+        // Ghi interaction cho hệ thống khuyến nghị
+        if (createCommentDto.post_id && createCommentDto.user_id) {
+            await this.userInteractionsService.record({
+                user_id: createCommentDto.user_id,
+                post_id: createCommentDto.post_id,
+                interaction_type: InteractionType.COMMENT,
+            });
+        }
 
         // Send notification to post owner
         await this.sendCommentNotification(createCommentDto);

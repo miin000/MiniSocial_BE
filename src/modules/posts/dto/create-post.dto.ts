@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsEnum, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 
 export enum CreatePostVisibility {
     PUBLIC = 'public',
@@ -30,4 +30,11 @@ export class CreatePostDto {
     @IsOptional()
     @IsString()
     group_id?: string;
+
+    // Chủ đề bài viết – bắt buộc 1-3 tag (slug), VD: ["technology", "gaming"]
+    @IsArray()
+    @ArrayMinSize(1)
+    @ArrayMaxSize(3)
+    @IsString({ each: true })
+    tags: string[];
 }

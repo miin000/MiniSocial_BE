@@ -8,6 +8,7 @@ import { UserSchema } from '../users/schemas/user.scheme';
 import { LikeSchema } from '../likes/schemas/like.scheme';
 import { PostSchema } from '../posts/schemas/post.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
+import { UserInteractionsModule } from '../user-interactions/user-interactions.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { FirebaseService } from '../../common/services/firebase.service';
       { name: 'Post', schema: PostSchema },
     ]),
     PostsModule,
+    UserInteractionsModule,
   ],
 
   controllers: [CommentsController],
