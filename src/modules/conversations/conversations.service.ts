@@ -43,10 +43,18 @@ export class ConversationsService {
         const saved = await conv.save();
 
         // Thêm 2 thành viên
+        const convId = saved._id.toString();
         await this.participantModel.insertMany([
-            { conv_id: saved._id.toString(), user_id: creatorId, role: ParticipantRole.MEMBER, joined_at: new Date() },
-            { conv_id: saved._id.toString(), user_id: dto.friend_id, role: ParticipantRole.MEMBER, joined_at: new Date() },
+            { conv_id: convId, user_id: creatorId, role: ParticipantRole.MEMBER, joined_at: new Date() },
+            { conv_id: convId, user_id: dto.friend_id, role: ParticipantRole.MEMBER, joined_at: new Date() },
         ]);
+
+        // Ghi metadata lên Firestore để Flutter subscribe realtime
+        this.firebaseService.upsertChatConversation({
+            convId,
+            participantIds: [creatorId, dto.friend_id],
+            type: ConversationType.PRIVATE,
+        }).catch(() => {});
 
         return this.enrichConversation(saved, creatorId);
     }
@@ -76,6 +84,16 @@ export class ConversationsService {
                 })),
         ];
         await this.participantModel.insertMany(participants);
+
+        // Ghi metadata lên Firestore để Flutter subscribe realtime
+        const allIds = [creatorId, ...dto.participant_ids.filter(id => id !== creatorId)];
+        this.firebaseService.upsertChatConversation({
+            convId,
+            participantIds: allIds,
+            type: ConversationType.GROUP,
+            name: dto.name,
+            avatarUrl: dto.avatar_url,
+        }).catch(() => {});
 
         return this.enrichConversation(saved, creatorId);
     }
@@ -151,12 +169,23 @@ export class ConversationsService {
 
     // ── Cập nhật last message cache ─────────────────────────────────────────
     async updateLastMessage(convId: string, messageId: string, content: string, senderId: string): Promise<void> {
+        const now = new Date();
         await this.conversationModel.findByIdAndUpdate(convId, {
             last_message_id: messageId,
             last_message_content: content,
-            last_message_at: new Date(),
+            last_message_at: now,
             last_message_sender_id: senderId,
         }).exec();
+
+        // Cập nhật Firestore để Flutter nhận real-time
+        this.firebaseService.upsertChatConversation({
+            convId,
+            participantIds: [], // merge: true sẽ không ghi đè field này
+            type: '',
+            lastMessageContent: content,
+            lastMessageAt: now,
+            lastSenderId: senderId,
+        }).catch(() => {});
     }
 
     // ── Đánh dấu đã đọc ────────────────────────────────────────────────────

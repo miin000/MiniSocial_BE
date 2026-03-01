@@ -49,7 +49,28 @@ export class MessagesService {
         // Gửi notification cho các thành viên khác
         await this.notifyParticipants(dto.conv_id, dto.sender_id, displayContent);
 
-        return this.enrichMessage(saved);
+        const enriched = await this.enrichMessage(saved);
+
+        // Ghi lên Firestore để Flutter nhận tin nhắn real-time
+        this.firebaseService.writeMessageToFirestore({
+            msgId: saved._id.toString(),
+            convId: dto.conv_id,
+            senderId: dto.sender_id,
+            senderInfo: enriched.sender_info,
+            content: enriched.content,
+            messageType: enriched.message_type,
+            mediaUrls: enriched.media_urls,
+            fileUrl: enriched.file_url,
+            fileName: enriched.file_name,
+            fileSize: enriched.file_size,
+            isRecalled: false,
+            replyToId: enriched.reply_to_id,
+            replyTo: enriched.reply_to,
+            sharedPostInfo: enriched.shared_post_info,
+            createdAt: saved.created_at as Date,
+        }).catch(() => {});
+
+        return enriched;
     }
 
     // ── Chia sẻ bài viết vào chat ──────────────────────────────────────────
@@ -79,7 +100,21 @@ export class MessagesService {
 
         await this.notifyParticipants(dto.conv_id, dto.sender_id, displayContent);
 
-        return this.enrichMessage(saved);
+        const enriched = await this.enrichMessage(saved);
+
+        // Ghi lên Firestore để Flutter nhận real-time
+        this.firebaseService.writeMessageToFirestore({
+            msgId: saved._id.toString(),
+            convId: dto.conv_id,
+            senderId: dto.sender_id,
+            senderInfo: enriched.sender_info,
+            content: enriched.content,
+            messageType: MessageType.SHARE_POST,
+            sharedPostInfo: enriched.shared_post_info,
+            createdAt: saved.created_at as Date,
+        }).catch(() => {});
+
+        return enriched;
     }
 
     // ── Lấy tin nhắn của conversation (phân trang) ─────────────────────────
@@ -126,6 +161,13 @@ export class MessagesService {
         msg.edited_at = new Date();
         const saved = await msg.save();
 
+        // Cập nhật Firestore
+        this.firebaseService.updateFirestoreMessage(msg.conv_id, saved._id.toString(), {
+            content: dto.content,
+            is_edited: true,
+            edited_at: msg.edited_at,
+        }).catch(() => {});
+
         return this.enrichMessage(saved);
     }
 
@@ -142,6 +184,15 @@ export class MessagesService {
         msg.file_url = '' as any;
         msg.file_name = '' as any;
         const saved = await msg.save();
+
+        // Cập nhật Firestore
+        this.firebaseService.updateFirestoreMessage(msg.conv_id, saved._id.toString(), {
+            is_recalled: true,
+            content: 'Tin nhắn đã bị thu hồi',
+            media_urls: [],
+            file_url: null,
+            file_name: null,
+        }).catch(() => {});
 
         return this.enrichMessage(saved);
     }

@@ -212,4 +212,111 @@ export class FirebaseService implements OnModuleInit {
             return null;
         }
     }
+
+    // ==================== CHAT REALTIME (Firestore) ====================
+
+    // Tạo/cập nhật metadata conversation trong Firestore (collection: chats)
+    async upsertChatConversation(data: {
+        convId: string;
+        participantIds: string[];
+        type: string;
+        name?: string;
+        avatarUrl?: string;
+        lastMessageContent?: string;
+        lastMessageAt?: Date;
+        lastSenderId?: string;
+    }): Promise<void> {
+        try {
+            if (!this.firestore) return;
+            const ref = this.firestore.collection('chats').doc(data.convId);
+            // Chỉ ghi các field có giá trị, tránh ghi đè participant_ids bằng []
+            const payload: Record<string, any> = {
+                updated_at: admin.firestore.FieldValue.serverTimestamp(),
+            };
+            if (data.participantIds.length > 0) {
+                payload['participant_ids'] = data.participantIds;
+            }
+            if (data.type) {
+                payload['type'] = data.type;
+            }
+            if (data.name !== undefined) payload['name'] = data.name ?? null;
+            if (data.avatarUrl !== undefined) payload['avatar_url'] = data.avatarUrl ?? null;
+            if (data.lastMessageContent !== undefined) payload['last_message_content'] = data.lastMessageContent;
+            if (data.lastMessageAt !== undefined) {
+                payload['last_message_at'] = admin.firestore.Timestamp.fromDate(data.lastMessageAt);
+            }
+            if (data.lastSenderId !== undefined) payload['last_sender_id'] = data.lastSenderId;
+            await ref.set(payload, { merge: true });
+        } catch (error) {
+            this.logger.warn('Failed to upsert chat conversation in Firestore:', error.message);
+        }
+    }
+
+    // Ghi tin nhắn vào Firestore chats/{convId}/messages/{msgId}
+    async writeMessageToFirestore(data: {
+        msgId: string;
+        convId: string;
+        senderId: string;
+        senderInfo: any;
+        content: string;
+        messageType: string;
+        mediaUrls?: string[];
+        fileUrl?: string | null;
+        fileName?: string | null;
+        fileSize?: number;
+        isRecalled?: boolean;
+        replyToId?: string | null;
+        replyTo?: any;
+        sharedPostInfo?: any;
+        createdAt?: Date;
+    }): Promise<void> {
+        try {
+            if (!this.firestore) return;
+            const ref = this.firestore
+                .collection('chats')
+                .doc(data.convId)
+                .collection('messages')
+                .doc(data.msgId);
+            await ref.set({
+                _id: data.msgId,
+                conv_id: data.convId,
+                sender_id: data.senderId,
+                sender_info: data.senderInfo ?? null,
+                content: data.content,
+                message_type: data.messageType,
+                media_urls: data.mediaUrls ?? [],
+                file_url: data.fileUrl ?? null,
+                file_name: data.fileName ?? null,
+                file_size: data.fileSize ?? 0,
+                is_recalled: data.isRecalled ?? false,
+                reply_to_id: data.replyToId ?? null,
+                reply_to: data.replyTo ?? null,
+                shared_post_info: data.sharedPostInfo ?? null,
+                created_at: data.createdAt
+                    ? admin.firestore.Timestamp.fromDate(data.createdAt)
+                    : admin.firestore.FieldValue.serverTimestamp(),
+            });
+        } catch (error) {
+            this.logger.warn('Failed to write message to Firestore:', error.message);
+        }
+    }
+
+    // Cập nhật tin nhắn trong Firestore (edit / recall)
+    async updateFirestoreMessage(
+        convId: string,
+        msgId: string,
+        updates: Record<string, any>,
+    ): Promise<void> {
+        try {
+            if (!this.firestore) return;
+            const ref = this.firestore
+                .collection('chats')
+                .doc(convId)
+                .collection('messages')
+                .doc(msgId);
+            await ref.update(updates);
+        } catch (error) {
+            this.logger.warn('Failed to update message in Firestore:', error.message);
+        }
+    }
 }
