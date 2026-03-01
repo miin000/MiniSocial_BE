@@ -125,7 +125,11 @@ export class MessagesService {
 
         // Đảm bảo chats/{convId} doc tồn tại trên Firestore (cần cho Firestore rules get())
         // await để đảm bảo doc tồn tại trước khi Flutter listener subscribe
-        await this.conversationsService.syncConversationsToFirestore([convId]).catch(() => {});
+        try {
+            await this.conversationsService.syncConversationsToFirestore([convId]);
+        } catch (err) {
+            console.error('[MessagesService] Firestore sync failed for', convId, err?.message);
+        }
 
         const skip = (page - 1) * limit;
 

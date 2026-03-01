@@ -135,11 +135,14 @@ export class ConversationsService {
             .lean()
             .exec();
 
-        // Build map convId → participantIds[]
+        this.logger.log(`[FirestoreSync] convIds=${JSON.stringify(convIds)}, found ${allParts.length} participants`);
+
+        // Build map convId → participantIds[] (dùng cả string lẫn convId gốc làm key)
         const partMap = new Map<string, string[]>();
         for (const p of allParts) {
-            if (!partMap.has(p.conv_id)) partMap.set(p.conv_id, []);
-            partMap.get(p.conv_id)!.push(p.user_id);
+            const key = p.conv_id.toString();
+            if (!partMap.has(key)) partMap.set(key, []);
+            partMap.get(key)!.push(p.user_id.toString());
         }
 
         // Lấy thông tin conversation để sync type/name/avatar
@@ -152,17 +155,26 @@ export class ConversationsService {
         for (const conv of convs) {
             const cid = conv._id.toString();
             const pIds = partMap.get(cid) ?? [];
-            if (pIds.length === 0) continue;
-            await this.firebaseService.upsertChatConversation({
-                convId: cid,
-                participantIds: pIds,
-                type: (conv as any).type ?? '',
-                name: (conv as any).name,
-                avatarUrl: (conv as any).avatar_url,
-                lastMessageContent: (conv as any).last_message_content,
-                lastMessageAt: (conv as any).last_message_at,
-                lastSenderId: (conv as any).last_message_sender_id,
-            });
+            this.logger.log(`[FirestoreSync] conv=${cid}, participantIds=${JSON.stringify(pIds)}`);
+            if (pIds.length === 0) {
+                this.logger.warn(`[FirestoreSync] Skipping conv=${cid}: no participants found`);
+                continue;
+            }
+            try {
+                await this.firebaseService.upsertChatConversation({
+                    convId: cid,
+                    participantIds: pIds,
+                    type: (conv as any).type ?? '',
+                    name: (conv as any).name,
+                    avatarUrl: (conv as any).avatar_url,
+                    lastMessageContent: (conv as any).last_message_content,
+                    lastMessageAt: (conv as any).last_message_at,
+                    lastSenderId: (conv as any).last_message_sender_id,
+                });
+                this.logger.log(`[FirestoreSync] Successfully wrote chats/${cid} to Firestore`);
+            } catch (error) {
+                this.logger.error(`[FirestoreSync] Failed to write chats/${cid}:`, error?.message);
+            }
         }
     }
 
