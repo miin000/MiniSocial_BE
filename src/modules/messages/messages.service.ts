@@ -122,6 +122,11 @@ export class MessagesService {
         convId: string, userId: string, page: number = 1, limit: number = 30,
     ): Promise<{ messages: any[]; total: number }> {
         await this.requireParticipant(convId, userId);
+
+        // Đảm bảo chats/{convId} doc tồn tại trên Firestore (cần cho Firestore rules get())
+        // await để đảm bảo doc tồn tại trước khi Flutter listener subscribe
+        await this.conversationsService.syncConversationsToFirestore([convId]).catch(() => {});
+
         const skip = (page - 1) * limit;
 
         const query: any = {

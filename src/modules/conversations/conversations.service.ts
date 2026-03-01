@@ -116,7 +116,54 @@ export class ConversationsService {
             .lean()
             .exec();
 
-        return Promise.all(convs.map(c => this.enrichConversation(c, userId)));
+        const enriched = await Promise.all(convs.map(c => this.enrichConversation(c, userId)));
+
+        // Sync tất cả conversation lên Firestore (đảm bảo doc tồn tại để rules get() hoạt động)
+        this.syncConversationsToFirestore(convIds).catch(() => {});
+
+        return enriched;
+    }
+
+    // ── Sync batch conversations lên Firestore ────────────────────────────
+    async syncConversationsToFirestore(convIds: string[]): Promise<void> {
+        if (convIds.length === 0) return;
+
+        // Lấy tất cả participants của các conv
+        const allParts = await this.participantModel
+            .find({ conv_id: { $in: convIds }, left_at: null })
+            .select('conv_id user_id')
+            .lean()
+            .exec();
+
+        // Build map convId → participantIds[]
+        const partMap = new Map<string, string[]>();
+        for (const p of allParts) {
+            if (!partMap.has(p.conv_id)) partMap.set(p.conv_id, []);
+            partMap.get(p.conv_id)!.push(p.user_id);
+        }
+
+        // Lấy thông tin conversation để sync type/name/avatar
+        const convs = await this.conversationModel
+            .find({ _id: { $in: convIds } })
+            .select('_id type name avatar_url last_message_content last_message_at last_message_sender_id')
+            .lean()
+            .exec();
+
+        for (const conv of convs) {
+            const cid = conv._id.toString();
+            const pIds = partMap.get(cid) ?? [];
+            if (pIds.length === 0) continue;
+            this.firebaseService.upsertChatConversation({
+                convId: cid,
+                participantIds: pIds,
+                type: (conv as any).type ?? '',
+                name: (conv as any).name,
+                avatarUrl: (conv as any).avatar_url,
+                lastMessageContent: (conv as any).last_message_content,
+                lastMessageAt: (conv as any).last_message_at,
+                lastSenderId: (conv as any).last_message_sender_id,
+            }).catch(() => {});
+        }
     }
 
     // ── Chi tiết conversation ───────────────────────────────────────────────
@@ -129,6 +176,9 @@ export class ConversationsService {
             conv_id: convId, user_id: userId, left_at: null,
         }).lean().exec();
         if (!participant) throw new ForbiddenException('Bạn không thuộc cuộc trò chuyện này');
+
+        // Sync lên Firestore để đảm bảo chats/{convId} doc tồn tại cho rules
+        this.syncConversationsToFirestore([convId]).catch(() => {});
 
         return this.enrichConversation(conv, userId);
     }
