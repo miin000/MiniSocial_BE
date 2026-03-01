@@ -153,7 +153,7 @@ export class ConversationsService {
             const cid = conv._id.toString();
             const pIds = partMap.get(cid) ?? [];
             if (pIds.length === 0) continue;
-            this.firebaseService.upsertChatConversation({
+            await this.firebaseService.upsertChatConversation({
                 convId: cid,
                 participantIds: pIds,
                 type: (conv as any).type ?? '',
@@ -162,7 +162,7 @@ export class ConversationsService {
                 lastMessageContent: (conv as any).last_message_content,
                 lastMessageAt: (conv as any).last_message_at,
                 lastSenderId: (conv as any).last_message_sender_id,
-            }).catch(() => {});
+            });
         }
     }
 
