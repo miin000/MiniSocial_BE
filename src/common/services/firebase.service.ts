@@ -260,6 +260,7 @@ export class FirebaseService implements OnModuleInit {
         senderInfo: any;
         content: string;
         messageType: string;
+        participantIds: string[];  // denormalized cho Firestore rules
         mediaUrls?: string[];
         fileUrl?: string | null;
         fileName?: string | null;
@@ -284,6 +285,7 @@ export class FirebaseService implements OnModuleInit {
                 sender_info: data.senderInfo ?? null,
                 content: data.content,
                 message_type: data.messageType,
+                participant_ids: data.participantIds,
                 media_urls: data.mediaUrls ?? [],
                 file_url: data.fileUrl ?? null,
                 file_name: data.fileName ?? null,

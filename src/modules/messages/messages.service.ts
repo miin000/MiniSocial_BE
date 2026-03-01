@@ -51,6 +51,9 @@ export class MessagesService {
 
         const enriched = await this.enrichMessage(saved);
 
+        // Lấy participant_ids để ghi vào Firestore (denormalized cho rules)
+        const pIds = await this.getParticipantIds(dto.conv_id);
+
         // Ghi lên Firestore để Flutter nhận tin nhắn real-time
         this.firebaseService.writeMessageToFirestore({
             msgId: saved._id.toString(),
@@ -59,6 +62,7 @@ export class MessagesService {
             senderInfo: enriched.sender_info,
             content: enriched.content,
             messageType: enriched.message_type,
+            participantIds: pIds,
             mediaUrls: enriched.media_urls,
             fileUrl: enriched.file_url,
             fileName: enriched.file_name,
@@ -103,6 +107,7 @@ export class MessagesService {
         const enriched = await this.enrichMessage(saved);
 
         // Ghi lên Firestore để Flutter nhận real-time
+        const pIds = await this.getParticipantIds(dto.conv_id);
         this.firebaseService.writeMessageToFirestore({
             msgId: saved._id.toString(),
             convId: dto.conv_id,
@@ -110,6 +115,7 @@ export class MessagesService {
             senderInfo: enriched.sender_info,
             content: enriched.content,
             messageType: MessageType.SHARE_POST,
+            participantIds: pIds,
             sharedPostInfo: enriched.shared_post_info,
             createdAt: saved.created_at as Date,
         }).catch(() => {});
@@ -305,6 +311,16 @@ export class MessagesService {
             conv_id: convId, user_id: userId, left_at: null,
         }).exec();
         if (!p) throw new ForbiddenException('Bạn không thuộc cuộc trò chuyện này');
+    }
+
+    // ── Helper: lấy participant_ids cho Firestore (denormalized) ────────────
+    private async getParticipantIds(convId: string): Promise<string[]> {
+        const parts = await this.participantModel
+            .find({ conv_id: convId, left_at: null })
+            .select('user_id')
+            .lean()
+            .exec();
+        return parts.map(p => p.user_id.toString());
     }
 
     // ── Helper: nội dung hiển thị cho last_message ──────────────────────────
