@@ -72,7 +72,7 @@ export class MessagesService {
             replyTo: enriched.reply_to,
             sharedPostInfo: enriched.shared_post_info,
             createdAt: saved.created_at as Date,
-        }).catch(() => {});
+        }).catch((err) => console.error('[MessagesService] writeMessageToFirestore error:', err?.message));
 
         return enriched;
     }

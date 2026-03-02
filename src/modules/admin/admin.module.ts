@@ -12,6 +12,7 @@ import { User, UserSchema } from '../users/schemas/user.scheme';
 import { Report, ReportSchema } from '../reports/schemas/report.scheme';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { FirebaseService } from '../../common/services/firebase.service';
 
 @Module({
@@ -28,6 +29,7 @@ import { FirebaseService } from '../../common/services/firebase.service';
     ]),
     UsersModule,
     AuthModule,
+    AnalyticsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, FirebaseService],

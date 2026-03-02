@@ -502,7 +502,10 @@ export class GroupsService {
             throw new ForbiddenException('Only moderators and admins can remove members');
         }
 
-        const member = await this.groupMemberModel.findById(memberId).exec();
+        // memberId is the user_id of the member to remove (not the document _id)
+        const member = await this.groupMemberModel
+            .findOne({ group_id: groupId, user_id: memberId })
+            .exec();
         if (!member) {
             throw new NotFoundException('Member not found');
         }
@@ -512,7 +515,9 @@ export class GroupsService {
             throw new ForbiddenException('Moderators cannot remove admins');
         }
 
-        await this.groupMemberModel.findByIdAndDelete(memberId).exec();
+        await this.groupMemberModel
+            .findOneAndDelete({ group_id: groupId, user_id: memberId })
+            .exec();
         
         if (member.status === GroupMemberStatus.ACTIVE) {
             await this.groupModel

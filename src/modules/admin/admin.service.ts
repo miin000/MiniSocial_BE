@@ -1,10 +1,10 @@
 ﻿
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { UserActivityLog } from './schemas/user-activity-log.schema';
+import { Model, Types } from 'mongoose';
+import { UserActivityLog, ActivityType } from './schemas/user-activity-log.schema';
 import { SystemLogs } from './schemas/system-logs.schema';
-import { SystemSettings } from './schemas/system-settings.schema';
+import { SystemSettings, DataType } from './schemas/system-settings.schema';
 import { UsersService } from '../users/users.service';
 import { Group } from '../groups/schemas/group.scheme';
 import { GroupMember } from '../groups/schemas/group-member.scheme';
@@ -12,6 +12,9 @@ import { Post, PostStatus } from '../posts/schemas/post.scheme';
 import { User, UserRoleAdmin, UserStatus } from '../users/schemas/user.scheme';
 import { Report, ReportStatus } from '../reports/schemas/report.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
+import { QuerySystemLogsDto } from './dto/system-logs.dto';
+import { QueryUserActivityLogsDto } from './dto/user-activity-logs.dto';
+import { CreateSystemSettingDto, UpdateSystemSettingDto } from './dto/system-settings.dto';
 
 @Injectable()
 export class AdminService {
@@ -33,18 +36,23 @@ export class AdminService {
         return this.usersService.findAll();
     }
 
-    async deleteUser(id: string) {
+    async deleteUser(id: string, adminId?: string) {
         await this.usersService.deleteUser(id);
+        if (adminId) await this.writeSystemLog(adminId, 'delete_user', 'user', id);
         return { message: 'User deleted successfully' };
     }
 
     // Block/Unblock user methods
-    async blockUser(id: string) {
-        return this.usersService.blockUser(id);
+    async blockUser(id: string, adminId?: string) {
+        const result = await this.usersService.blockUser(id);
+        if (adminId) await this.writeSystemLog(adminId, 'block_user', 'user', id);
+        return result;
     }
 
-    async unblockUser(id: string) {
-        return this.usersService.unblockUser(id);
+    async unblockUser(id: string, adminId?: string) {
+        const result = await this.usersService.unblockUser(id);
+        if (adminId) await this.writeSystemLog(adminId, 'unblock_user', 'user', id);
+        return result;
     }
 
     // Group management methods for admin
@@ -60,9 +68,10 @@ export class AdminService {
         return { group, members, posts };
     }
 
-    async toggleGroupStatus(groupId: string, status: 'active' | 'blocked'): Promise<Group> {
+    async toggleGroupStatus(groupId: string, status: 'active' | 'blocked', adminId?: string): Promise<Group> {
         const updatedGroup = await this.groupModel.findByIdAndUpdate(groupId, { status }, { new: true });
         if (!updatedGroup) throw new Error('Group not found');
+        if (adminId) await this.writeSystemLog(adminId, `group_${status}`, 'group', groupId);
         return updatedGroup;
     }
 
@@ -237,21 +246,24 @@ export class AdminService {
         };
     }
 
-    async hidePost(id: string): Promise<any> {
+    async hidePost(id: string, adminId?: string): Promise<any> {
         const post = await this.postModel.findByIdAndUpdate(id, { status: 'hidden' }, { new: true }).exec();
         if (!post) throw new NotFoundException('Post not found');
+        if (adminId) await this.writeSystemLog(adminId, 'hide_post', 'post', id);
         return { message: 'Post hidden successfully', post };
     }
 
-    async showPost(id: string): Promise<any> {
+    async showPost(id: string, adminId?: string): Promise<any> {
         const post = await this.postModel.findByIdAndUpdate(id, { status: PostStatus.ACTIVE }, { new: true }).exec();
         if (!post) throw new NotFoundException('Post not found');
+        if (adminId) await this.writeSystemLog(adminId, 'show_post', 'post', id);
         return { message: 'Post shown successfully', post };
     }
 
-    async deletePost(id: string): Promise<any> {
+    async deletePost(id: string, adminId?: string): Promise<any> {
         const post = await this.postModel.findByIdAndUpdate(id, { status: PostStatus.DELETED }, { new: true }).exec();
         if (!post) throw new NotFoundException('Post not found');
+        if (adminId) await this.writeSystemLog(adminId, 'delete_post', 'post', id);
         return { message: 'Post deleted successfully' };
     }
 
@@ -433,6 +445,13 @@ export class AdminService {
         }
 
         await report.save();
+
+        // Ghi log
+        await this.writeSystemLog(resolvedBy, 'resolve_report', 'report', id, {
+            action_taken: body.action_taken,
+            resolved_note: body.resolved_note,
+        });
+
         return { message: 'Report resolved successfully', report };
     }
 
@@ -458,6 +477,424 @@ export class AdminService {
         report.action_taken = 'none';
 
         await report.save();
+
+        await this.writeSystemLog(resolvedBy, 'reject_report', 'report', id, { resolved_note: body.resolved_note });
+
         return { message: 'Report rejected', report };
+    }
+
+    // ============ System Logs (Admin Logs / Audit Trail) ============
+
+    /** Ghi system log — gọi nội bộ từ mọi admin action */
+    async writeSystemLog(
+        userId: string, action: string, entityType?: string,
+        entityId?: string, details?: Record<string, any>,
+        ipAddress?: string, userAgent?: string,
+    ): Promise<void> {
+        try {
+            await this.systemLogsModel.create({
+                user_id: new Types.ObjectId(userId),
+                action,
+                entity_type: entityType || null,
+                entity_id: entityId || null,
+                details: details || null,
+                ip_address: ipAddress || null,
+                user_agent: userAgent || null,
+                created_at: new Date(),
+            });
+        } catch (err) {
+            // Không throw — log lỗi nhẹ, không ảnh hưởng business
+            console.error('[AdminService] writeSystemLog error:', err?.message);
+        }
+    }
+
+    /** UC: Xem danh sách admin logs (phân trang + search + filter) */
+    async getSystemLogs(dto: QuerySystemLogsDto): Promise<{
+        logs: any[]; total: number; page: number; limit: number; totalPages: number;
+    }> {
+        const { search, action, entity_type, user_id, from, to, page = 1, limit = 20 } = dto;
+        const query: any = {};
+
+        if (search) {
+            query.$or = [
+                { action: { $regex: search, $options: 'i' } },
+                { entity_type: { $regex: search, $options: 'i' } },
+                { entity_id: { $regex: search, $options: 'i' } },
+            ];
+        }
+        if (action) query.action = action;
+        if (entity_type) query.entity_type = entity_type;
+        if (user_id) query.user_id = new Types.ObjectId(user_id);
+        if (from || to) {
+            query.created_at = {};
+            if (from) query.created_at.$gte = new Date(from);
+            if (to) query.created_at.$lte = new Date(to);
+        }
+
+        const total = await this.systemLogsModel.countDocuments(query);
+        const logs = await this.systemLogsModel
+            .find(query)
+            .sort({ created_at: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .lean()
+            .exec();
+
+        // Enrich: thêm username/avatar cho admin đã thực hiện action
+        const adminIds = [...new Set(logs.map(l => l.user_id?.toString()).filter(Boolean))];
+        const admins = await this.userModel
+            .find({ _id: { $in: adminIds } })
+            .select('_id username full_name avatar_url')
+            .lean()
+            .exec();
+        const adminMap = new Map(admins.map(a => [(a as any)._id.toString(), a]));
+
+        const enriched = logs.map(log => {
+            const admin = adminMap.get(log.user_id?.toString());
+            return {
+                ...log,
+                admin_username: (admin as any)?.username || 'system',
+                admin_full_name: (admin as any)?.full_name || null,
+                admin_avatar: (admin as any)?.avatar_url || null,
+            };
+        });
+
+        return { logs: enriched, total, page, limit, totalPages: Math.ceil(total / limit) };
+    }
+
+    /** UC: Xem chi tiết 1 log entry */
+    async getSystemLogById(id: string): Promise<any> {
+        const log = await this.systemLogsModel.findById(id).lean().exec();
+        if (!log) throw new NotFoundException('System log not found');
+
+        let adminInfo: any = null;
+        if (log.user_id) {
+            adminInfo = await this.userModel
+                .findById(log.user_id)
+                .select('_id username full_name avatar_url email')
+                .lean()
+                .exec();
+        }
+
+        return { ...log, admin_info: adminInfo };
+    }
+
+    /** UC: Export logs — trả về tất cả logs theo filter (không phân trang) */
+    async exportSystemLogs(dto: QuerySystemLogsDto): Promise<any[]> {
+        const { search, action, entity_type, user_id, from, to } = dto;
+        const query: any = {};
+
+        if (search) {
+            query.$or = [
+                { action: { $regex: search, $options: 'i' } },
+                { entity_type: { $regex: search, $options: 'i' } },
+                { entity_id: { $regex: search, $options: 'i' } },
+            ];
+        }
+        if (action) query.action = action;
+        if (entity_type) query.entity_type = entity_type;
+        if (user_id) query.user_id = new Types.ObjectId(user_id);
+        if (from || to) {
+            query.created_at = {};
+            if (from) query.created_at.$gte = new Date(from);
+            if (to) query.created_at.$lte = new Date(to);
+        }
+
+        const logs = await this.systemLogsModel
+            .find(query)
+            .sort({ created_at: -1 })
+            .limit(5000) // giới hạn export
+            .lean()
+            .exec();
+
+        const adminIds = [...new Set(logs.map(l => l.user_id?.toString()).filter(Boolean))];
+        const admins = await this.userModel
+            .find({ _id: { $in: adminIds } })
+            .select('_id username full_name')
+            .lean()
+            .exec();
+        const adminMap = new Map(admins.map(a => [(a as any)._id.toString(), a]));
+
+        return logs.map(log => ({
+            _id: (log as any)._id,
+            admin_username: (adminMap.get(log.user_id?.toString()) as any)?.username || 'system',
+            action: log.action,
+            entity_type: log.entity_type,
+            entity_id: log.entity_id,
+            details: log.details,
+            ip_address: log.ip_address,
+            created_at: log.created_at,
+        }));
+    }
+
+    /** Lấy danh sách action types đã có (dùng cho filter dropdown) */
+    async getSystemLogActionTypes(): Promise<string[]> {
+        return this.systemLogsModel.distinct('action').exec();
+    }
+
+    // ============ User Activity Logs ============
+
+    /** Ghi user activity — gọi từ các module khác khi user thao tác */
+    async writeUserActivity(userId: string, activityType: ActivityType): Promise<void> {
+        try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            await this.userActivityLogModel.findOneAndUpdate(
+                { user_id: new Types.ObjectId(userId), activity_date: today, activity_type: activityType },
+                { $inc: { activity_count: 1 } },
+                { upsert: true, new: true },
+            ).exec();
+        } catch (err) {
+            console.error('[AdminService] writeUserActivity error:', err?.message);
+        }
+    }
+
+    /** UC: Xem danh sách user activity logs (phân trang + search + filter) */
+    async getUserActivityLogs(dto: QueryUserActivityLogsDto): Promise<{
+        logs: any[]; total: number; page: number; limit: number; totalPages: number;
+    }> {
+        const { search, user_id, activity_type, from, to, page = 1, limit = 20 } = dto;
+
+        // Nếu có search, tìm user trước
+        let userIds: string[] | null = null;
+        if (search) {
+            const matchedUsers = await this.userModel
+                .find({
+                    $or: [
+                        { username: { $regex: search, $options: 'i' } },
+                        { email: { $regex: search, $options: 'i' } },
+                        { full_name: { $regex: search, $options: 'i' } },
+                    ],
+                })
+                .select('_id')
+                .lean()
+                .exec();
+            userIds = matchedUsers.map(u => (u as any)._id.toString());
+            if (userIds.length === 0) {
+                return { logs: [], total: 0, page, limit, totalPages: 0 };
+            }
+        }
+
+        const query: any = {};
+        if (user_id) query.user_id = new Types.ObjectId(user_id);
+        else if (userIds) query.user_id = { $in: userIds.map(id => new Types.ObjectId(id)) };
+        if (activity_type) query.activity_type = activity_type;
+        if (from || to) {
+            query.activity_date = {};
+            if (from) query.activity_date.$gte = new Date(from);
+            if (to) query.activity_date.$lte = new Date(to);
+        }
+
+        const total = await this.userActivityLogModel.countDocuments(query);
+        const logs = await this.userActivityLogModel
+            .find(query)
+            .sort({ activity_date: -1, activity_type: 1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .lean()
+            .exec();
+
+        // Enrich with user info
+        const logUserIds = [...new Set(logs.map(l => l.user_id?.toString()).filter(Boolean))];
+        const users = await this.userModel
+            .find({ _id: { $in: logUserIds } })
+            .select('_id username full_name avatar_url')
+            .lean()
+            .exec();
+        const userMap = new Map(users.map(u => [(u as any)._id.toString(), u]));
+
+        const enriched = logs.map(log => {
+            const user = userMap.get(log.user_id?.toString());
+            return {
+                ...log,
+                username: (user as any)?.username || 'unknown',
+                full_name: (user as any)?.full_name || null,
+                avatar_url: (user as any)?.avatar_url || null,
+            };
+        });
+
+        return { logs: enriched, total, page, limit, totalPages: Math.ceil(total / limit) };
+    }
+
+    /** UC: Tổng hợp thống kê theo user (top active users) */
+    async getUserActivitySummary(userId?: string, from?: string, to?: string): Promise<any> {
+        const match: any = {};
+        if (userId) match.user_id = new Types.ObjectId(userId);
+        if (from || to) {
+            match.activity_date = {};
+            if (from) match.activity_date.$gte = new Date(from);
+            if (to) match.activity_date.$lte = new Date(to);
+        }
+
+        const pipeline: any[] = [
+            { $match: match },
+            {
+                $group: {
+                    _id: userId ? '$activity_type' : '$user_id',
+                    total_count: { $sum: '$activity_count' },
+                    days_active: { $addToSet: '$activity_date' },
+                },
+            },
+            { $addFields: { days_active_count: { $size: '$days_active' } } },
+            { $project: { days_active: 0 } },
+            { $sort: { total_count: -1 } },
+            { $limit: userId ? 50 : 20 },
+        ];
+
+        const results = await this.userActivityLogModel.aggregate(pipeline).exec();
+
+        if (!userId) {
+            // Enrich user info
+            const ids = results.map(r => r._id);
+            const users = await this.userModel
+                .find({ _id: { $in: ids } })
+                .select('_id username full_name avatar_url')
+                .lean()
+                .exec();
+            const userMap = new Map(users.map(u => [(u as any)._id.toString(), u]));
+            return results.map(r => ({
+                ...r,
+                username: (userMap.get(r._id?.toString()) as any)?.username || 'unknown',
+                full_name: (userMap.get(r._id?.toString()) as any)?.full_name || null,
+                avatar_url: (userMap.get(r._id?.toString()) as any)?.avatar_url || null,
+            }));
+        }
+
+        return results;
+    }
+
+    /** UC: Export user activity logs */
+    async exportUserActivityLogs(dto: QueryUserActivityLogsDto): Promise<any[]> {
+        const { user_id, activity_type, from, to } = dto;
+        const query: any = {};
+        if (user_id) query.user_id = new Types.ObjectId(user_id);
+        if (activity_type) query.activity_type = activity_type;
+        if (from || to) {
+            query.activity_date = {};
+            if (from) query.activity_date.$gte = new Date(from);
+            if (to) query.activity_date.$lte = new Date(to);
+        }
+
+        const logs = await this.userActivityLogModel
+            .find(query)
+            .sort({ activity_date: -1 })
+            .limit(5000)
+            .lean()
+            .exec();
+
+        const logUserIds = [...new Set(logs.map(l => l.user_id?.toString()).filter(Boolean))];
+        const users = await this.userModel
+            .find({ _id: { $in: logUserIds } })
+            .select('_id username full_name')
+            .lean()
+            .exec();
+        const userMap = new Map(users.map(u => [(u as any)._id.toString(), u]));
+
+        return logs.map(log => ({
+            _id: (log as any)._id,
+            username: (userMap.get(log.user_id?.toString()) as any)?.username || 'unknown',
+            activity_type: log.activity_type,
+            activity_count: log.activity_count,
+            activity_date: log.activity_date,
+        }));
+    }
+
+    // ============ System Settings (CRUD) ============
+
+    /** UC: Lấy tất cả settings */
+    async getAllSettings(): Promise<any[]> {
+        return this.systemSettingsModel.find().sort({ setting_key: 1 }).lean().exec();
+    }
+
+    /** UC: Lấy setting theo key */
+    async getSettingByKey(key: string): Promise<any> {
+        const setting = await this.systemSettingsModel.findOne({ setting_key: key }).lean().exec();
+        if (!setting) throw new NotFoundException(`Setting '${key}' not found`);
+        return setting;
+    }
+
+    /** UC: Lấy settings public (không cần auth) */
+    async getPublicSettings(): Promise<any[]> {
+        return this.systemSettingsModel.find({ is_public: true }).sort({ setting_key: 1 }).lean().exec();
+    }
+
+    /** UC: Tạo setting mới */
+    async createSetting(dto: CreateSystemSettingDto, adminId: string): Promise<any> {
+        const exists = await this.systemSettingsModel.findOne({ setting_key: dto.setting_key }).exec();
+        if (exists) throw new ConflictException(`Setting key '${dto.setting_key}' already exists`);
+
+        const setting = await this.systemSettingsModel.create({
+            ...dto,
+            updated_by: new Types.ObjectId(adminId),
+        });
+
+        // Ghi log
+        await this.writeSystemLog(adminId, 'create_setting', 'setting', dto.setting_key, {
+            setting_key: dto.setting_key,
+            setting_value: dto.setting_value,
+            data_type: dto.data_type,
+        });
+
+        return setting.toObject();
+    }
+
+    /** UC: Cập nhật setting */
+    async updateSetting(key: string, dto: UpdateSystemSettingDto, adminId: string): Promise<any> {
+        const setting = await this.systemSettingsModel.findOne({ setting_key: key }).exec();
+        if (!setting) throw new NotFoundException(`Setting '${key}' not found`);
+
+        const oldValue = setting.setting_value;
+
+        if (dto.setting_value !== undefined) setting.setting_value = dto.setting_value;
+        if (dto.data_type !== undefined) setting.data_type = dto.data_type;
+        if (dto.description !== undefined) setting.description = dto.description;
+        if (dto.is_public !== undefined) setting.is_public = dto.is_public;
+        setting.updated_by = new Types.ObjectId(adminId);
+
+        await setting.save();
+
+        // Ghi log
+        await this.writeSystemLog(adminId, 'update_setting', 'setting', key, {
+            old_value: oldValue,
+            new_value: dto.setting_value ?? setting.setting_value,
+        });
+
+        return setting.toObject();
+    }
+
+    /** UC: Xóa setting */
+    async deleteSetting(key: string, adminId: string): Promise<any> {
+        const setting = await this.systemSettingsModel.findOneAndDelete({ setting_key: key }).exec();
+        if (!setting) throw new NotFoundException(`Setting '${key}' not found`);
+
+        // Ghi log
+        await this.writeSystemLog(adminId, 'delete_setting', 'setting', key);
+
+        return { message: `Setting '${key}' deleted successfully` };
+    }
+
+    /** Seed default settings nếu chưa có */
+    async seedDefaultSettings(): Promise<void> {
+        const defaults = [
+            { setting_key: 'app_name', setting_value: 'MiniSocial', data_type: DataType.STRING, description: 'Tên ứng dụng', is_public: true },
+            { setting_key: 'max_post_length', setting_value: '5000', data_type: DataType.NUMBER, description: 'Số ký tự tối đa của bài viết', is_public: true },
+            { setting_key: 'max_upload_size_mb', setting_value: '10', data_type: DataType.NUMBER, description: 'Kích thước file upload tối đa (MB)', is_public: true },
+            { setting_key: 'allow_registration', setting_value: 'true', data_type: DataType.BOOLEAN, description: 'Cho phép đăng ký tài khoản mới', is_public: false },
+            { setting_key: 'auto_moderation', setting_value: 'false', data_type: DataType.BOOLEAN, description: 'Tự động kiểm duyệt nội dung', is_public: false },
+            { setting_key: 'max_warnings_before_ban', setting_value: '3', data_type: DataType.NUMBER, description: 'Số cảnh cáo tối đa trước khi khóa tài khoản', is_public: false },
+            { setting_key: 'maintenance_mode', setting_value: 'false', data_type: DataType.BOOLEAN, description: 'Chế độ bảo trì hệ thống', is_public: true },
+            { setting_key: 'default_avatar_url', setting_value: '', data_type: DataType.STRING, description: 'URL avatar mặc định', is_public: true },
+            { setting_key: 'max_group_members', setting_value: '500', data_type: DataType.NUMBER, description: 'Số thành viên tối đa mỗi nhóm', is_public: true },
+            { setting_key: 'notification_email_enabled', setting_value: 'false', data_type: DataType.BOOLEAN, description: 'Bật gửi email thông báo', is_public: false },
+        ];
+
+        for (const d of defaults) {
+            await this.systemSettingsModel.updateOne(
+                { setting_key: d.setting_key },
+                { $setOnInsert: d },
+                { upsert: true },
+            );
+        }
     }
 }

@@ -1,16 +1,24 @@
 ﻿
-import { Controller, Get, Put, Post, Delete, Param, Body, Query, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Param, Body, Query, HttpCode, HttpStatus, UseGuards, Request, Res } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRoleAdmin } from '../users/schemas/user.scheme';
+import { QuerySystemLogsDto } from './dto/system-logs.dto';
+import { QueryUserActivityLogsDto } from './dto/user-activity-logs.dto';
+import { CreateSystemSettingDto, UpdateSystemSettingDto } from './dto/system-settings.dto';
+import { QueryAnalyticsDto, QueryDailyStatsDto, QueryMonthlyStatsDto } from './dto/analytics.dto';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles(UserRoleAdmin.ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly analyticsService: AnalyticsService,
+  ) {}
 
   // User management endpoints
   @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
@@ -22,22 +30,22 @@ export class AdminController {
   @Roles(UserRoleAdmin.ADMIN)
   @Delete('users/:id')
   @HttpCode(HttpStatus.OK)
-  async deleteUser(@Param('id') id: string) {
-    return this.adminService.deleteUser(id);
+  async deleteUser(@Param('id') id: string, @Request() req) {
+    return this.adminService.deleteUser(id, req.user.userId);
   }
 
   @Roles(UserRoleAdmin.ADMIN)
   @Put('users/:id/block')
   @HttpCode(HttpStatus.OK)
-  async blockUser(@Param('id') id: string) {
-    return this.adminService.blockUser(id);
+  async blockUser(@Param('id') id: string, @Request() req) {
+    return this.adminService.blockUser(id, req.user.userId);
   }
 
   @Roles(UserRoleAdmin.ADMIN)
   @Put('users/:id/unblock')
   @HttpCode(HttpStatus.OK)
-  async unblockUser(@Param('id') id: string) {
-    return this.adminService.unblockUser(id);
+  async unblockUser(@Param('id') id: string, @Request() req) {
+    return this.adminService.unblockUser(id, req.user.userId);
   }
 
   // ============ Post Management ============
@@ -61,21 +69,21 @@ export class AdminController {
 
   @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Put('posts/:id/hide')
-  async hidePost(@Param('id') id: string) {
-    return this.adminService.hidePost(id);
+  async hidePost(@Param('id') id: string, @Request() req) {
+    return this.adminService.hidePost(id, req.user.userId);
   }
 
   @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Put('posts/:id/show')
-  async showPost(@Param('id') id: string) {
-    return this.adminService.showPost(id);
+  async showPost(@Param('id') id: string, @Request() req) {
+    return this.adminService.showPost(id, req.user.userId);
   }
 
   @Roles(UserRoleAdmin.ADMIN)
   @Delete('posts/:id')
   @HttpCode(HttpStatus.OK)
-  async deletePost(@Param('id') id: string) {
-    return this.adminService.deletePost(id);
+  async deletePost(@Param('id') id: string, @Request() req) {
+    return this.adminService.deletePost(id, req.user.userId);
   }
 
   // ============ Report Management ============
@@ -137,8 +145,8 @@ export class AdminController {
 
   @Roles(UserRoleAdmin.ADMIN)
   @Put('groups/:id/status')
-  async toggleGroupStatus(@Param('id') id: string, @Body() body: { status: 'active' | 'blocked' }) {
-    return this.adminService.toggleGroupStatus(id, body.status);
+  async toggleGroupStatus(@Param('id') id: string, @Body() body: { status: 'active' | 'blocked' }, @Request() req) {
+    return this.adminService.toggleGroupStatus(id, body.status, req.user.userId);
   }
 
   // ============ Admin Account Management ============
@@ -183,5 +191,140 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   async removeAdminAccount(@Param('id') id: string) {
     return this.adminService.removeAdminAccount(id);
+  }
+
+  // ============ System Logs (Admin Logs / Audit Trail) ============
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('logs')
+  async getSystemLogs(@Query() dto: QuerySystemLogsDto) {
+    return this.adminService.getSystemLogs(dto);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('logs/action-types')
+  async getSystemLogActionTypes() {
+    return this.adminService.getSystemLogActionTypes();
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('logs/export')
+  async exportSystemLogs(@Query() dto: QuerySystemLogsDto) {
+    return this.adminService.exportSystemLogs(dto);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('logs/:id')
+  async getSystemLogById(@Param('id') id: string) {
+    return this.adminService.getSystemLogById(id);
+  }
+
+  // ============ User Activity Logs ============
+
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Get('user-activity')
+  async getUserActivityLogs(@Query() dto: QueryUserActivityLogsDto) {
+    return this.adminService.getUserActivityLogs(dto);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Get('user-activity/summary')
+  async getUserActivitySummary(
+    @Query('user_id') userId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.adminService.getUserActivitySummary(userId, from, to);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Get('user-activity/export')
+  async exportUserActivityLogs(@Query() dto: QueryUserActivityLogsDto) {
+    return this.adminService.exportUserActivityLogs(dto);
+  }
+
+  // ============ System Settings ============
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('settings')
+  async getAllSettings() {
+    return this.adminService.getAllSettings();
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('settings/:key')
+  async getSettingByKey(@Param('key') key: string) {
+    return this.adminService.getSettingByKey(key);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Post('settings')
+  async createSetting(@Body() dto: CreateSystemSettingDto, @Request() req) {
+    return this.adminService.createSetting(dto, req.user.userId);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Put('settings/:key')
+  async updateSetting(@Param('key') key: string, @Body() dto: UpdateSystemSettingDto, @Request() req) {
+    return this.adminService.updateSetting(key, dto, req.user.userId);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Delete('settings/:key')
+  @HttpCode(HttpStatus.OK)
+  async deleteSetting(@Param('key') key: string, @Request() req) {
+    return this.adminService.deleteSetting(key, req.user.userId);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Post('settings/seed')
+  async seedDefaultSettings() {
+    await this.adminService.seedDefaultSettings();
+    return { message: 'Default settings seeded successfully' };
+  }
+
+  // ============ Analytics & Statistics ============
+
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Get('analytics/overview')
+  async getAnalyticsOverview(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.analyticsService.getOverview(from, to);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Get('analytics/growth')
+  async getGrowthChart(@Query() dto: QueryAnalyticsDto) {
+    return this.analyticsService.getGrowthChart(dto);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Get('analytics/engagement')
+  async getEngagementStats(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.analyticsService.getEngagementStats(from, to);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Get('analytics/daily')
+  async getDailyStats(@Query() dto: QueryDailyStatsDto) {
+    return this.analyticsService.getDailyStats(dto);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Get('analytics/monthly')
+  async getMonthlyStats(@Query() dto: QueryMonthlyStatsDto) {
+    return this.analyticsService.getMonthlyStats(dto);
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Post('analytics/refresh')
+  async refreshAnalytics() {
+    await this.analyticsService.computeTodayStats();
+    return { message: 'Analytics refreshed successfully' };
+  }
+
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('analytics/export')
+  async exportAnalytics(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.analyticsService.exportStats(from, to);
   }
 }

@@ -242,7 +242,7 @@ export class FirebaseService implements OnModuleInit {
             if (data.name !== undefined) payload['name'] = data.name ?? null;
             if (data.avatarUrl !== undefined) payload['avatar_url'] = data.avatarUrl ?? null;
             if (data.lastMessageContent !== undefined) payload['last_message_content'] = data.lastMessageContent;
-            if (data.lastMessageAt !== undefined) {
+            if (data.lastMessageAt != null) {
                 payload['last_message_at'] = admin.firestore.Timestamp.fromDate(data.lastMessageAt);
             }
             if (data.lastSenderId !== undefined) payload['last_sender_id'] = data.lastSenderId;
@@ -272,7 +272,11 @@ export class FirebaseService implements OnModuleInit {
         createdAt?: Date;
     }): Promise<void> {
         try {
-            if (!this.firestore) return;
+            if (!this.firestore) {
+                this.logger.warn('[writeMessage] Firestore not initialized!');
+                return;
+            }
+            this.logger.log(`[writeMessage] Writing chats/${data.convId}/messages/${data.msgId}`);
             const ref = this.firestore
                 .collection('chats')
                 .doc(data.convId)
@@ -298,8 +302,9 @@ export class FirebaseService implements OnModuleInit {
                     ? admin.firestore.Timestamp.fromDate(data.createdAt)
                     : admin.firestore.FieldValue.serverTimestamp(),
             });
+            this.logger.log(`[writeMessage] Successfully wrote chats/${data.convId}/messages/${data.msgId}`);
         } catch (error) {
-            this.logger.warn('Failed to write message to Firestore:', error.message);
+            this.logger.error(`[writeMessage] Failed chats/${data.convId}/messages/${data.msgId}:`, error.message);
         }
     }
 

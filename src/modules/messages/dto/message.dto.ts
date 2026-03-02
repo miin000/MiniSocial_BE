@@ -5,6 +5,7 @@ export class SendMessageDto {
     @IsString()
     conv_id: string;
 
+    @IsOptional()
     @IsString()
     sender_id: string;
 
@@ -44,6 +45,7 @@ export class SharePostDto {
     @IsString()
     conv_id: string;
 
+    @IsOptional()
     @IsString()
     sender_id: string;
 
