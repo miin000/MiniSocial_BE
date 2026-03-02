@@ -1,6 +1,6 @@
 ﻿import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { AdminController } from './admin.controller';
+import { AdminController, PublicSettingsController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { SystemLogs, SystemLogsSchema } from './schemas/system-logs.schema';
 import { SystemSettings, SystemSettingsSchema } from './schemas/system-settings.schema';
@@ -31,7 +31,7 @@ import { FirebaseService } from '../../common/services/firebase.service';
     AuthModule,
     AnalyticsModule,
   ],
-  controllers: [AdminController],
+  controllers: [AdminController, PublicSettingsController],
   providers: [AdminService, FirebaseService],
   exports: [AdminService],
 })
