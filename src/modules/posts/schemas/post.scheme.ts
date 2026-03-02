@@ -68,6 +68,10 @@ export class Post {
     @Prop({ type: [String], default: [] })
     tags: string[];
 
+    // Flag đánh dấu bài đã được chỉnh sửa bởi tác giả
+    @Prop({ default: false })
+    is_edited: boolean;
+
     created_at: Date;
     updated_at: Date;
 }

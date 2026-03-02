@@ -1,4 +1,5 @@
 ﻿import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Post, PostSchema } from './schemas/post.scheme';
 import { PostsController } from './posts.controller';
@@ -11,6 +12,7 @@ import { UserInteractionsModule } from '../user-interactions/user-interactions.m
 
 @Module({
   imports: [
+    HttpModule,
     MongooseModule.forFeature([
       { name: Post.name, schema: PostSchema },
       { name: 'User', schema: UserSchema },
