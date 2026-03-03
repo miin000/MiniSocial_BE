@@ -223,6 +223,9 @@ export class AdminService {
     }
 
     async getPostById(id: string): Promise<any> {
+        if (!Types.ObjectId.isValid(id)) {
+            throw new NotFoundException(`Post not found: invalid id '${id}'`);
+        }
         const post = await this.postModel.findById(id).lean().exec();
         if (!post) throw new NotFoundException('Post not found');
 
