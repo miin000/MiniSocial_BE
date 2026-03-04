@@ -26,6 +26,21 @@ export class FriendsService {
             })
             .exec();
 
+        // Build adjacency map to compute mutual friend counts
+        const allAccepted = await this.friendModel.find({ status: 'accepted' }).exec();
+        const adjacency = new Map<string, Set<string>>();
+        const addEdge = (a: any, b: any) => {
+            const as = a.toString();
+            const bs = b.toString();
+            if (!adjacency.has(as)) adjacency.set(as, new Set());
+            adjacency.get(as)!.add(bs);
+        };
+        allAccepted.forEach((d) => {
+            addEdge(d.user_id_1, d.user_id_2);
+            addEdge(d.user_id_2, d.user_id_1);
+        });
+        const userFriends = adjacency.get(uid) || new Set<string>();
+
         const seen = new Set<string>();
         const results: any[] = [];
 
@@ -35,12 +50,16 @@ export class FriendsService {
             seen.add(otherId);
             try {
                 const user = await this.usersService.findById(otherId);
+                const otherFriends = adjacency.get(otherId) || new Set<string>();
+                let mutualCount = 0;
+                userFriends.forEach((f) => { if (otherFriends.has(f)) mutualCount++; });
                 results.push({
                     id: user._id,
                     fullName: (user as any).full_name || (user as any).fullName || (user as any).username,
                     avatar: (user as any).avatar_url || (user as any).avatar,
                     avatar_url: (user as any).avatar_url || (user as any).avatar,
                     username: (user as any).username,
+                    mutualCount,
                 });
             } catch (e) {
                 this.logger.warn(`Could not load user ${otherId}: ${e}`);
