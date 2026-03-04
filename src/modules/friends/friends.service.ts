@@ -74,7 +74,7 @@ export class FriendsService {
     }
 
     // Return simple suggestions (users that are not friends and not the same user)
-    async getSuggestions(userId: string, limit = 10) {
+    async getSuggestions(userId: string, limit = 50) {
         // Build adjacency map of accepted friendships so we can compute mutual counts.
         const uid = userId.toString();
 
@@ -115,7 +115,13 @@ export class FriendsService {
         const candidates = (allUsers as any[])
             .filter((u) => {
                 const id = u._id.toString();
-                return id !== uid && !userFriends.has(id) && !pendingIds.has(id);
+                // loại bỏ: chính mình, bạn hiện tại, đang pending, user bị khóa
+                return (
+                    id !== uid &&
+                    !userFriends.has(id) &&
+                    !pendingIds.has(id) &&
+                    (u.status ?? 'ACTIVE') !== 'BLOCKED'
+                );
             })
             .map((u) => {
                 const id = u._id.toString();
