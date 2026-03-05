@@ -8,6 +8,7 @@ import { LikeSchema } from '../likes/schemas/like.scheme';
 import { FriendSchema } from '../friends/schemas/friend.scheme';
 import { CategoriesModule } from '../categories/categories.module';
 import { UserInteractionsModule } from '../user-interactions/user-interactions.module';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { UserInteractionsModule } from '../user-interactions/user-interactions.m
     ]),
     CategoriesModule,
     UserInteractionsModule,
+    AdminModule,
   ],
 
   controllers: [PostsController],

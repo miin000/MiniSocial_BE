@@ -10,6 +10,7 @@ import { PostSchema } from '../posts/schemas/post.scheme';
 import { CommentSchema } from '../comments/schemas/comment.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 import { UserInteractionsModule } from '../user-interactions/user-interactions.module';
+import { AdminModule } from '../admin/admin.module';
 
 
 @Module({
@@ -23,6 +24,7 @@ import { UserInteractionsModule } from '../user-interactions/user-interactions.m
     PostsModule,
     CommentsModule,
     UserInteractionsModule,
+    AdminModule,
   ],
 
   controllers: [LikesController],

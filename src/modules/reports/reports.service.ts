@@ -9,6 +9,8 @@ import { User, UserStatus } from '../users/schemas/user.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 import { UserInteractionsService } from '../user-interactions/user-interactions.service';
 import { InteractionType } from '../user-interactions/schemas/user-interaction.schema';
+import { AdminService } from '../admin/admin.service';
+import { ActivityType } from '../admin/schemas/user-activity-log.schema';
 
 @Injectable()
 export class ReportsService {
@@ -18,6 +20,7 @@ export class ReportsService {
         @InjectModel(User.name) private userModel: Model<User>,
         private readonly firebaseService: FirebaseService,
         private readonly userInteractionsService: UserInteractionsService,
+        private readonly adminService: AdminService,
     ) { }
 
     async create(createReportDto: CreateReportDto): Promise<Report> {
@@ -38,7 +41,12 @@ export class ReportsService {
             } catch { }
         }
 
-        return createdReport.save();
+        const saved = await createdReport.save();
+
+        // Ghi user activity log
+        this.adminService.writeUserActivity(createReportDto.reporter_id, ActivityType.REPORT_POST).catch(() => {});
+
+        return saved;
     }
 
     async findAll(page = 1, limit = 20, status?: string): Promise<{ reports: any[]; total: number }> {

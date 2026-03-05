@@ -1,10 +1,12 @@
 ﻿// src/auth/auth.service.ts
-import { Injectable, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from 'modules/users/users.service';
+import { AdminService } from '../admin/admin.service';
+import { ActivityType } from '../admin/schemas/user-activity-log.schema';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +15,7 @@ export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    @Inject(forwardRef(() => AdminService)) private adminService: AdminService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -72,6 +75,9 @@ export class AuthService {
     };
 
     const accessToken = await this.jwtService.signAsync(payload);
+
+    // Ghi user activity log
+    this.adminService.writeUserActivity(String(user._id), ActivityType.LOGIN).catch(() => {});
 
     return {
       accessToken,

@@ -1,6 +1,7 @@
-﻿import { Module } from '@nestjs/common';
+﻿import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AdminController } from './admin.controller';
+import { SettingsPublicController } from './settings-public.controller';
 import { AdminService } from './admin.service';
 import { SystemLogs, SystemLogsSchema } from './schemas/system-logs.schema';
 import { SystemSettings, SystemSettingsSchema } from './schemas/system-settings.schema';
@@ -28,10 +29,10 @@ import { FirebaseService } from '../../common/services/firebase.service';
       { name: Report.name, schema: ReportSchema },
     ]),
     UsersModule,
-    AuthModule,
+    forwardRef(() => AuthModule),
     AnalyticsModule,
   ],
-  controllers: [AdminController],
+  controllers: [AdminController, SettingsPublicController],
   providers: [AdminService, FirebaseService],
   exports: [AdminService],
 })

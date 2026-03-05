@@ -7,6 +7,8 @@ import { UpdatePostDto } from './dto/update-post.dto';
 import { CategoriesService } from '../categories/categories.service';
 import { UserInteractionsService } from '../user-interactions/user-interactions.service';
 import { InteractionType } from '../user-interactions/schemas/user-interaction.schema';
+import { AdminService } from '../admin/admin.service';
+import { ActivityType } from '../admin/schemas/user-activity-log.schema';
 
 @Injectable()
 export class PostsService {
@@ -17,6 +19,7 @@ export class PostsService {
         @InjectModel('Friend') private friendModel: Model<any>,
         private readonly categoriesService: CategoriesService,
         private readonly userInteractionsService: UserInteractionsService,
+        private readonly adminService: AdminService,
     ) { }
 
     async create(createPostDto: CreatePostDto): Promise<Post> {
@@ -47,6 +50,9 @@ export class PostsService {
 
         // Cập nhật post_count cho các category
         await this.categoriesService.incrementPostCount(createPostDto.tags);
+
+        // Ghi user activity log
+        this.adminService.writeUserActivity(createPostDto.user_id, ActivityType.CREATE_POST).catch(() => {});
 
         return saved;
     }

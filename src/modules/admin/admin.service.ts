@@ -84,6 +84,13 @@ export class AdminService {
         }).select('-password').exec();
     }
 
+    // Get single admin account by ID
+    async getAdminAccountById(userId: string) {
+        const user = await this.userModel.findById(userId).select('-password').exec();
+        if (!user) throw new NotFoundException('User not found');
+        return user;
+    }
+
     // Add admin role to a user account
     async addAdminAccount(userId: string, role: UserRoleAdmin) {
         if (role === UserRoleAdmin.NONE) {
@@ -877,16 +884,17 @@ export class AdminService {
     /** Seed default settings nếu chưa có */
     async seedDefaultSettings(): Promise<void> {
         const defaults = [
-            { setting_key: 'app_name', setting_value: 'MiniSocial', data_type: DataType.STRING, description: 'Tên ứng dụng', is_public: true },
             { setting_key: 'max_post_length', setting_value: '5000', data_type: DataType.NUMBER, description: 'Số ký tự tối đa của bài viết', is_public: true },
             { setting_key: 'max_upload_size_mb', setting_value: '10', data_type: DataType.NUMBER, description: 'Kích thước file upload tối đa (MB)', is_public: true },
-            { setting_key: 'allow_registration', setting_value: 'true', data_type: DataType.BOOLEAN, description: 'Cho phép đăng ký tài khoản mới', is_public: false },
-            { setting_key: 'auto_moderation', setting_value: 'false', data_type: DataType.BOOLEAN, description: 'Tự động kiểm duyệt nội dung', is_public: false },
-            { setting_key: 'max_warnings_before_ban', setting_value: '3', data_type: DataType.NUMBER, description: 'Số cảnh cáo tối đa trước khi khóa tài khoản', is_public: false },
+            { setting_key: 'allow_registration', setting_value: 'true', data_type: DataType.BOOLEAN, description: 'Cho phép đăng ký tài khoản mới', is_public: true },
+            { setting_key: 'max_warnings_before_ban', setting_value: '3', data_type: DataType.NUMBER, description: 'Số cảnh cáo tối đa trước khi khóa tài khoản', is_public: true },
             { setting_key: 'maintenance_mode', setting_value: 'false', data_type: DataType.BOOLEAN, description: 'Chế độ bảo trì hệ thống', is_public: true },
+            { setting_key: 'maintenance_message', setting_value: 'Hệ thống đang bảo trì, vui lòng quay lại sau.', data_type: DataType.STRING, description: 'Thông báo bảo trì', is_public: true },
             { setting_key: 'default_avatar_url', setting_value: '', data_type: DataType.STRING, description: 'URL avatar mặc định', is_public: true },
             { setting_key: 'max_group_members', setting_value: '500', data_type: DataType.NUMBER, description: 'Số thành viên tối đa mỗi nhóm', is_public: true },
-            { setting_key: 'notification_email_enabled', setting_value: 'false', data_type: DataType.BOOLEAN, description: 'Bật gửi email thông báo', is_public: false },
+            { setting_key: 'max_groups_per_user', setting_value: '20', data_type: DataType.NUMBER, description: 'Số nhóm tối đa mỗi người dùng', is_public: true },
+            { setting_key: 'max_images_per_post', setting_value: '10', data_type: DataType.NUMBER, description: 'Số ảnh tối đa mỗi bài viết', is_public: true },
+            { setting_key: 'allowed_image_types', setting_value: 'jpg,jpeg,png,webp,gif', data_type: DataType.STRING, description: 'Định dạng ảnh cho phép', is_public: true },
         ];
 
         for (const d of defaults) {

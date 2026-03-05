@@ -8,6 +8,7 @@ import { Post, PostSchema } from '../posts/schemas/post.scheme';
 import { User, UserSchema } from '../users/schemas/user.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 import { UserInteractionsModule } from '../user-interactions/user-interactions.module';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { UserInteractionsModule } from '../user-interactions/user-interactions.m
       { name: User.name, schema: UserSchema },
     ]),
     UserInteractionsModule,
+    AdminModule,
   ],
 
   controllers: [ReportsController],

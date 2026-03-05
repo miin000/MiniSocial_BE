@@ -1,5 +1,5 @@
 ﻿// src/auth/auth.module.ts
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from 'modules/users/users.module';
@@ -8,11 +8,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { FirebaseService } from '../../common/services/firebase.service';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
     UsersModule, // Cho phép AuthSercice inject UsersService
     PassportModule,
+    forwardRef(() => AdminModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({ // Cấu hình JWT module

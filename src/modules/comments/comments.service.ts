@@ -6,6 +6,8 @@ import { CreateCommentDto } from './dto/create-comment.dto';
 import { FirebaseService } from '../../common/services/firebase.service';
 import { UserInteractionsService } from '../user-interactions/user-interactions.service';
 import { InteractionType } from '../user-interactions/schemas/user-interaction.schema';
+import { AdminService } from '../admin/admin.service';
+import { ActivityType } from '../admin/schemas/user-activity-log.schema';
 
 @Injectable()
 export class CommentsService {
@@ -16,6 +18,7 @@ export class CommentsService {
         @InjectModel('Post') private postModel: Model<any>,
         private readonly firebaseService: FirebaseService,
         private readonly userInteractionsService: UserInteractionsService,
+        private readonly adminService: AdminService,
     ) { }
 
     async create(createCommentDto: CreateCommentDto): Promise<Comment> {
@@ -36,6 +39,11 @@ export class CommentsService {
 
         // Send notification to post owner
         await this.sendCommentNotification(createCommentDto);
+
+        // Ghi user activity log
+        if (createCommentDto.user_id) {
+            this.adminService.writeUserActivity(createCommentDto.user_id, ActivityType.COMMENT).catch(() => {});
+        }
 
         return saved;
     }

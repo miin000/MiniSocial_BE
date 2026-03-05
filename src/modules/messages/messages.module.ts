@@ -10,6 +10,7 @@ import { PostSchema } from '../posts/schemas/post.scheme';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { UserInteractionsModule } from '../user-interactions/user-interactions.module';
 import { FirebaseService } from '../../common/services/firebase.service';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { FirebaseService } from '../../common/services/firebase.service';
     ]),
     forwardRef(() => ConversationsModule),
     UserInteractionsModule,
+    AdminModule,
   ],
   controllers: [MessagesController],
   providers: [MessagesService, FirebaseService],

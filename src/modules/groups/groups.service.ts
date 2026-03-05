@@ -11,6 +11,8 @@ import { FirebaseService } from '../../common/services/firebase.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupPostDto } from './dto/create-group-post.dto';
+import { AdminService } from '../admin/admin.service';
+import { ActivityType } from '../admin/schemas/user-activity-log.schema';
 
 @Injectable()
 export class GroupsService {
@@ -21,6 +23,7 @@ export class GroupsService {
         @InjectModel(User.name) private userModel: Model<User>,
         @InjectModel(Like.name) private likeModel: Model<Like>,
         private readonly firebaseService: FirebaseService,
+        private readonly adminService: AdminService,
     ) { }
 
     // Helper to create notification
@@ -212,6 +215,9 @@ export class GroupsService {
                 joined_at: new Date(),
             });
 
+            // Ghi user activity log
+            this.adminService.writeUserActivity(creatorId, ActivityType.CREATE_GROUP).catch(() => {});
+
             return savedGroup;
         } catch (error) {
             throw new BadRequestException(`Failed to create group: ${error.message}`);
@@ -237,6 +243,9 @@ export class GroupsService {
         if (!updatedGroup) {
             throw new NotFoundException('Group not found');
         }
+
+        // Ghi user activity log
+        this.adminService.writeUserActivity(userId, ActivityType.EDIT_GROUP).catch(() => {});
         
         return updatedGroup;
     }
@@ -256,6 +265,9 @@ export class GroupsService {
         await this.groupModel.findByIdAndDelete(groupId).exec();
         await this.groupMemberModel.deleteMany({ group_id: groupId }).exec();
         await this.postModel.deleteMany({ group_id: groupId }).exec();
+
+        // Ghi user activity log
+        this.adminService.writeUserActivity(userId, ActivityType.DELETE_GROUP).catch(() => {});
     }
 
     // UC5.1: Join group (request to join)

@@ -165,6 +165,13 @@ export class AdminController {
     return this.adminService.searchUsersForAdmin(query);
   }
 
+  // Get single admin account by ID
+  @Roles(UserRoleAdmin.ADMIN)
+  @Get('accounts/:id')
+  async getAdminAccountById(@Param('id') id: string) {
+    return this.adminService.getAdminAccountById(id);
+  }
+
   // Add a user as moderator/viewer
   @Roles(UserRoleAdmin.ADMIN)
   @Post('accounts/:id')
@@ -245,31 +252,31 @@ export class AdminController {
 
   // ============ System Settings ============
 
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Get('settings')
   async getAllSettings() {
     return this.adminService.getAllSettings();
   }
 
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Get('settings/:key')
   async getSettingByKey(@Param('key') key: string) {
     return this.adminService.getSettingByKey(key);
   }
 
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Post('settings')
   async createSetting(@Body() dto: CreateSystemSettingDto, @Request() req) {
     return this.adminService.createSetting(dto, req.user.userId);
   }
 
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Put('settings/:key')
   async updateSetting(@Param('key') key: string, @Body() dto: UpdateSystemSettingDto, @Request() req) {
     return this.adminService.updateSetting(key, dto, req.user.userId);
   }
 
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Delete('settings/:key')
   @HttpCode(HttpStatus.OK)
   async deleteSetting(@Param('key') key: string, @Request() req) {

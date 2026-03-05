@@ -9,6 +9,8 @@ import { ConversationsService } from '../conversations/conversations.service';
 import { FirebaseService } from '../../common/services/firebase.service';
 import { UserInteractionsService } from '../user-interactions/user-interactions.service';
 import { InteractionType } from '../user-interactions/schemas/user-interaction.schema';
+import { AdminService } from '../admin/admin.service';
+import { ActivityType } from '../admin/schemas/user-activity-log.schema';
 
 @Injectable()
 export class MessagesService {
@@ -20,6 +22,7 @@ export class MessagesService {
         private readonly conversationsService: ConversationsService,
         private readonly firebaseService: FirebaseService,
         private readonly userInteractionsService: UserInteractionsService,
+        private readonly adminService: AdminService,
     ) { }
 
     // ── Gửi tin nhắn (text, ảnh, file) ─────────────────────────────────────
@@ -74,6 +77,9 @@ export class MessagesService {
             createdAt: saved.created_at as Date,
         }).catch((err) => console.error('[MessagesService] writeMessageToFirestore error:', err?.message));
 
+        // Ghi user activity log
+        this.adminService.writeUserActivity(dto.sender_id, ActivityType.MESSAGE).catch(() => {});
+
         return enriched;
     }
 
@@ -101,6 +107,9 @@ export class MessagesService {
             post_id: dto.post_id,
             interaction_type: InteractionType.SHARE,
         });
+
+        // Ghi user activity log
+        this.adminService.writeUserActivity(dto.sender_id, ActivityType.SHARE).catch(() => {});
 
         await this.notifyParticipants(dto.conv_id, dto.sender_id, displayContent);
 

@@ -6,6 +6,8 @@ import { CreateLikeDto } from './dto/create-like.dto';
 import { FirebaseService } from '../../common/services/firebase.service';
 import { UserInteractionsService } from '../user-interactions/user-interactions.service';
 import { InteractionType } from '../user-interactions/schemas/user-interaction.schema';
+import { AdminService } from '../admin/admin.service';
+import { ActivityType } from '../admin/schemas/user-activity-log.schema';
 
 @Injectable()
 export class LikesService {
@@ -16,6 +18,7 @@ export class LikesService {
         @InjectModel('Comment') private commentModel: Model<any>,
         private readonly firebaseService: FirebaseService,
         private readonly userInteractionsService: UserInteractionsService,
+        private readonly adminService: AdminService,
     ) { }
 
     async toggleLike(createLikeDto: CreateLikeDto): Promise<{ liked: boolean, like?: Like }> {
@@ -49,6 +52,9 @@ export class LikesService {
 
             // Send notification to post/comment owner
             await this.sendLikeNotification(createLikeDto);
+
+            // Ghi user activity log
+            this.adminService.writeUserActivity(createLikeDto.user_id, ActivityType.LIKE).catch(() => {});
 
             return { liked: true, like: savedLike };
         }
