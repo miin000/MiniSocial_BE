@@ -1,6 +1,18 @@
 ﻿
 import { Controller, Get, Put, Post, Delete, Param, Body, Query, HttpCode, HttpStatus, UseGuards, Request, Res } from '@nestjs/common';
 import { AdminService } from './admin.service';
+
+// ── Public endpoint: không cần auth ─────────────────────────────────────────
+@Controller('settings')
+export class PublicSettingsController {
+  constructor(private readonly adminService: AdminService) {}
+
+  /** GET /api/v1/settings/public — Flutter & Next.js đọc cấu hình công khai */
+  @Get('public')
+  getPublicSettings() {
+    return this.adminService.getPublicSettings();
+  }
+}
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';

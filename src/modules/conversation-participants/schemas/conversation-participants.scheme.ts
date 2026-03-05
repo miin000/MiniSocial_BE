@@ -40,6 +40,16 @@ export class ConversationParticipant {
     @Prop({ default: false })
     is_muted: boolean;
 
+    // Người đã chặn participant này (UC4.12: block trong chat riêng)
+    // null = không bị chặn; có giá trị = user_id của người đã chặn
+    @Prop({ type: String, default: null })
+    blocked_by: string;
+
+    // Timestamp khi user xóa lịch sử chat (UC: clear history)
+    // Khi fetch messages, chỉ lấy messages sau thời điểm này
+    @Prop({ type: Date, default: null })
+    history_cleared_at: Date;
+
     created_at: Date;
     updated_at: Date;
 }

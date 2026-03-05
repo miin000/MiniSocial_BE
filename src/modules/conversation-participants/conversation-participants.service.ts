@@ -42,13 +42,17 @@ export class ConversationParticipantsService {
     }
 
     // ── Thêm thành viên vào nhóm ───────────────────────────────────────────
+    // UC4.6: Mời thêm người vào nhóm chat – bất kỳ thành viên nào đều có thể mời
     async addMember(convId: string, addedByUserId: string, targetUserId: string): Promise<any> {
         const conv = await this.conversationModel.findById(convId).exec();
         if (!conv) throw new NotFoundException('Nhóm chat không tồn tại');
         if (conv.type !== ConversationType.GROUP) throw new BadRequestException('Chỉ thêm thành viên vào nhóm chat');
 
-        // Kiểm tra quyền: leader hoặc admin
-        await this.requireRole(convId, addedByUserId, [ParticipantRole.LEADER, ParticipantRole.ADMIN]);
+        // UC4.6: Bất kỳ thành viên nào đều có thể mời (không phân biệt role)
+        const inviter = await this.participantModel.findOne({
+            conv_id: convId, user_id: addedByUserId, left_at: null,
+        }).exec();
+        if (!inviter) throw new ForbiddenException('Bạn không thuộc cuộc trò chuyện này');
 
         // Kiểm tra đã trong nhóm chưa
         const existing = await this.participantModel.findOne({
@@ -223,24 +227,65 @@ export class ConversationParticipantsService {
         return p.save();
     }
 
-    // ── Chặn người dùng (private chat) ──────────────────────────────────────
-    // Khi chặn: set left_at → không thể nhắn tin, nhưng lịch sử vẫn còn
+    // ── Chặn người dùng trong chat riêng (UC4.12) ───────────────────────────
+    // Khi chặn: đánh dấu blocked_by trên participant của đối phương
+    // → đối phương không gửi tin được, nhưng lịch sử vẫn còn
     async blockUser(convId: string, blockerUserId: string): Promise<void> {
         const conv = await this.conversationModel.findById(convId).exec();
         if (!conv || conv.type !== ConversationType.PRIVATE) {
             throw new BadRequestException('Chỉ áp dụng cho chat riêng');
         }
 
-        // Tìm đối phương
-        const participants = await this.participantModel.find({ conv_id: convId }).exec();
-        const other = participants.find(p => p.user_id !== blockerUserId);
-        if (!other) throw new NotFoundException('Không tìm thấy đối phương');
+        // Kiểm tra người chặn có trong conversation không
+        const blockerParticipant = await this.participantModel.findOne({
+            conv_id: convId, user_id: blockerUserId, left_at: null,
+        }).exec();
+        if (!blockerParticipant) throw new ForbiddenException('Bạn không thuộc cuộc trò chuyện này');
 
-        // Đánh dấu cả 2 đã rời → không ai nhắn tin được nữa
-        await this.participantModel.updateMany(
-            { conv_id: convId },
-            { left_at: new Date() },
-        ).exec();
+        // Tìm participant của đối phương
+        const otherParticipant = await this.participantModel.findOne({
+            conv_id: convId,
+            user_id: { $ne: blockerUserId },
+        }).exec();
+        if (!otherParticipant) throw new NotFoundException('Không tìm thấy đối phương');
+
+        // Đánh dấu đối phương bị chặn bởi blockerUserId
+        otherParticipant.blocked_by = blockerUserId;
+        await otherParticipant.save();
+    }
+
+    // ── Bỏ chặn người dùng (UC4.13) ─────────────────────────────────────────
+    async unblockUser(convId: string, unblockerUserId: string): Promise<void> {
+        const conv = await this.conversationModel.findById(convId).exec();
+        if (!conv || conv.type !== ConversationType.PRIVATE) {
+            throw new BadRequestException('Chỉ áp dụng cho chat riêng');
+        }
+
+        // Tìm participant của đối phương (người bị chặn)
+        const otherParticipant = await this.participantModel.findOne({
+            conv_id: convId,
+            user_id: { $ne: unblockerUserId },
+        }).exec();
+        if (!otherParticipant) throw new NotFoundException('Không tìm thấy đối phương');
+
+        // Kiểm tra xem người gọi có phải là người đã chặn không
+        if (otherParticipant.blocked_by !== unblockerUserId) {
+            throw new ForbiddenException('Bạn chưa chặn người này');
+        }
+
+        otherParticipant.blocked_by = null as any;
+        await otherParticipant.save();
+    }
+
+    // ── Xóa lịch sử chat phía mình (UC) ─────────────────────────────────────
+    async clearHistory(convId: string, userId: string): Promise<void> {
+        const p = await this.participantModel.findOne({
+            conv_id: convId, user_id: userId, left_at: null,
+        }).exec();
+        if (!p) throw new ForbiddenException('Bạn không thuộc cuộc trò chuyện này');
+
+        p.history_cleared_at = new Date();
+        await p.save();
     }
 
     // ── Helper: kiểm tra vai trò ────────────────────────────────────────────

@@ -107,11 +107,31 @@ export class ConversationParticipantsController {
     }
   }
 
-  // ── Chặn người dùng (chat riêng) ─────────────────────────────────────
+  // ── Chặn người dùng (chat riêng) – UC4.12 ──────────────────────────
   @Post(':convId/block')
   async blockUser(@Request() req, @Param('convId') convId: string) {
     try {
       return await this.participantsService.blockUser(convId, req.user.userId);
+    } catch (error) {
+      throw new HttpException(error.message, error.status || HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // ── Bỏ chặn người dùng (chat riêng) – UC4.13 ───────────────────────
+  @Post(':convId/unblock')
+  async unblockUser(@Request() req, @Param('convId') convId: string) {
+    try {
+      return await this.participantsService.unblockUser(convId, req.user.userId);
+    } catch (error) {
+      throw new HttpException(error.message, error.status || HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // ── Xóa lịch sử chat phía mình ───────────────────────────────────────
+  @Post(':convId/clear-history')
+  async clearHistory(@Request() req, @Param('convId') convId: string) {
+    try {
+      return await this.participantsService.clearHistory(convId, req.user.userId);
     } catch (error) {
       throw new HttpException(error.message, error.status || HttpStatus.BAD_REQUEST);
     }

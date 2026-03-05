@@ -23,7 +23,7 @@ export const INTERACTION_WEIGHT: Record<InteractionType, number> = {
     [InteractionType.REPORT]: -5,
 };
 
-@Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
+@Schema({ collection: 'user_interactions', timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class UserInteraction {
     @Prop({ required: true })
     user_id: string;

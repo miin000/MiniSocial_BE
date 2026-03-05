@@ -1,6 +1,8 @@
 ﻿import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { Post, PostVisibility, PostStatus } from './schemas/post.scheme';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -12,6 +14,8 @@ import { ActivityType } from '../admin/schemas/user-activity-log.schema';
 
 @Injectable()
 export class PostsService {
+    private readonly mlServerUrl = process.env.ML_SERVER_URL ?? 'http://localhost:8000';
+
     constructor(
         @InjectModel(Post.name) private postModel: Model<Post>,
         @InjectModel('User') private userModel: Model<any>,
@@ -19,7 +23,11 @@ export class PostsService {
         @InjectModel('Friend') private friendModel: Model<any>,
         private readonly categoriesService: CategoriesService,
         private readonly userInteractionsService: UserInteractionsService,
+<<<<<<< HEAD
         private readonly adminService: AdminService,
+=======
+        private readonly httpService: HttpService,
+>>>>>>> 2b848fd35df6fc54999af63f3e5ba434d821bba4
     ) { }
 
     async create(createPostDto: CreatePostDto): Promise<Post> {
@@ -75,34 +83,80 @@ export class PostsService {
         const skip = (page - 1) * limit;
         
         // Build query: non-group posts, active status
-        const query: any = {
+        const baseQuery: any = {
             group_id: { $in: [null, undefined, ''] },
             status: PostStatus.ACTIVE,
         };
 
         // Handle visibility filtering
         if (currentUserId) {
-            // Get friend IDs for 'friends' visibility posts
             const friendIds = await this.getFriendIds(currentUserId);
-            query.$or = [
+            baseQuery.$or = [
                 { visibility: PostVisibility.PUBLIC },
                 { visibility: PostVisibility.FRIENDS, user_id: { $in: [currentUserId, ...friendIds] } },
                 { visibility: PostVisibility.PRIVATE, user_id: currentUserId },
             ];
         } else {
-            query.visibility = PostVisibility.PUBLIC;
+            baseQuery.visibility = PostVisibility.PUBLIC;
         }
 
-        const [posts, total] = await Promise.all([
-            this.postModel
-                .find(query)
-                .sort({ created_at: -1 })
-                .skip(skip)
-                .limit(limit)
-                .lean()
-                .exec(),
-            this.postModel.countDocuments(query)
-        ]);
+        const total = await this.postModel.countDocuments(baseQuery);
+
+        // Try ML recommendations on page 1 when user is logged in
+        if (currentUserId && page === 1) {
+            try {
+                const mlRes = await firstValueFrom(
+                    this.httpService.get(`${this.mlServerUrl}/recommend/${currentUserId}`, { timeout: 5000 }),
+                );
+                const recommendations: Array<{ post_id: string; score: number }> =
+                    mlRes.data?.recommendations ?? [];
+
+                if (recommendations.length > 0) {
+                    // Build ordered list of recommended post_ids
+                    const recommendedIds = recommendations.map((r) => r.post_id);
+
+                    // Fetch recommended posts that pass visibility filter
+                    const mlQuery = { ...baseQuery, _id: { $in: recommendedIds } };
+                    const mlPosts = await this.postModel.find(mlQuery).lean().exec();
+
+                    // Sort by ML rank order
+                    const idIndexMap = new Map(recommendedIds.map((id, i) => [id, i]));
+                    mlPosts.sort((a, b) => {
+                        const ia = idIndexMap.get(String(a._id)) ?? 999;
+                        const ib = idIndexMap.get(String(b._id)) ?? 999;
+                        return ia - ib;
+                    });
+
+                    // If fewer than limit, fill with newest posts not already in the list
+                    if (mlPosts.length < limit) {
+                        const excludeIds = mlPosts.map((p) => String(p._id));
+                        const fillQuery = { ...baseQuery, _id: { $nin: excludeIds } };
+                        const fillPosts = await this.postModel
+                            .find(fillQuery)
+                            .sort({ created_at: -1 })
+                            .limit(limit - mlPosts.length)
+                            .lean()
+                            .exec();
+                        mlPosts.push(...fillPosts);
+                    }
+
+                    const finalPosts = mlPosts.slice(0, limit);
+                    const enriched = await this.enrichPostsWithUserInfo(finalPosts, currentUserId);
+                    return { posts: enriched, total };
+                }
+            } catch {
+                // ML server unavailable – fall through to time-sorted
+            }
+        }
+
+        // Fallback: sort by newest
+        const posts = await this.postModel
+            .find(baseQuery)
+            .sort({ created_at: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean()
+            .exec();
 
         const enrichedPosts = await this.enrichPostsWithUserInfo(posts, currentUserId);
         return { posts: enrichedPosts, total };
@@ -121,8 +175,8 @@ export class PostsService {
                 post_id: id,
                 interaction_type: InteractionType.VIEW,
             });
-            // Tăng view_count
-            await this.postModel.findByIdAndUpdate(id, { $inc: { view_count: 1 } }).exec();
+            // Tăng view_count (timestamps: false để không cập nhật updated_at)
+            await this.postModel.findByIdAndUpdate(id, { $inc: { view_count: 1 } }, { timestamps: false }).exec();
         }
 
         const enrichedPosts = await this.enrichPostsWithUserInfo([post], currentUserId);
@@ -255,8 +309,9 @@ export class PostsService {
     }
 
     async update(id: string, updatePostDto: UpdatePostDto): Promise<Post> {
+        // is_edited = true khi user chỉnh sửa nội dung bài viết
         const updatedPost = await this.postModel
-            .findByIdAndUpdate(id, updatePostDto, { new: true })
+            .findByIdAndUpdate(id, { ...updatePostDto, is_edited: true }, { new: true })
             .exec();
         if (!updatedPost) {
             throw new NotFoundException(`Post with ID ${id} not found`);
@@ -276,13 +331,13 @@ export class PostsService {
 
     async incrementLikesCount(id: string, increment: number): Promise<void> {
         await this.postModel
-            .findByIdAndUpdate(id, { $inc: { likes_count: increment } })
+            .findByIdAndUpdate(id, { $inc: { likes_count: increment } }, { timestamps: false })
             .exec();
     }
 
     async incrementCommentsCount(id: string, increment: number): Promise<void> {
         await this.postModel
-            .findByIdAndUpdate(id, { $inc: { comments_count: increment } })
+            .findByIdAndUpdate(id, { $inc: { comments_count: increment } }, { timestamps: false })
             .exec();
     }
 

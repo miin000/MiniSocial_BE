@@ -10,6 +10,7 @@ import { Like } from '../likes/schemas/like.scheme';
 import { FirebaseService } from '../../common/services/firebase.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
+import { UpdateGroupSettingsDto } from './dto/update-group-settings.dto';
 import { CreateGroupPostDto } from './dto/create-group-post.dto';
 import { AdminService } from '../admin/admin.service';
 import { ActivityType } from '../admin/schemas/user-activity-log.schema';
@@ -250,6 +251,39 @@ export class GroupsService {
         return updatedGroup;
     }
 
+    // UC5.8: Cập nhật cài đặt nhóm – bật/tắt duyệt bài và duyệt thành viên (admin only)
+    async updateGroupSettings(groupId: string, userId: string, settings: UpdateGroupSettingsDto): Promise<Group> {
+        // Chỉ admin mới được thay đổi cài đặt
+        const member = await this.groupMemberModel.findOne({
+            group_id: groupId,
+            user_id: userId,
+            role: GroupMemberRole.ADMIN,
+            status: GroupMemberStatus.ACTIVE,
+        }).exec();
+
+        if (!member) {
+            throw new ForbiddenException('Chỉ admin nhóm mới có thể thay đổi cài đặt');
+        }
+
+        const updateData: Partial<{ require_post_approval: boolean; require_member_approval: boolean }> = {};
+        if (settings.require_post_approval !== undefined) {
+            updateData.require_post_approval = settings.require_post_approval;
+        }
+        if (settings.require_member_approval !== undefined) {
+            updateData.require_member_approval = settings.require_member_approval;
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            throw new BadRequestException('Không có cài đặt nào được cập nhật');
+        }
+
+        const updated = await this.groupModel
+            .findByIdAndUpdate(groupId, updateData, { new: true })
+            .exec();
+        if (!updated) throw new NotFoundException('Group not found');
+        return updated;
+    }
+
     // UC5.5: Delete group (admin only)
     async deleteGroup(groupId: string, userId: string): Promise<void> {
         const member = await this.groupMemberModel.findOne({ 
@@ -355,7 +389,7 @@ export class GroupsService {
         }
     }
 
-    // UC5.8: Invite member
+    // UC5.14: Invite member to group (mod/admin)
     async inviteMember(groupId: string, inviterId: string, inviteeId: string): Promise<GroupMember> {
         const inviter = await this.groupMemberModel
             .findOne({ group_id: groupId, user_id: inviterId })
