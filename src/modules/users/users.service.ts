@@ -31,6 +31,19 @@ export class UsersService {
         return user;
     }
 
+    // Lấy public profile của user khác (không có thông tin nhạy cảm)
+    async getPublicProfile(id: string): Promise<any> {
+        const user = await this.userModel
+            .findById(id)
+            .select('_id username full_name avatar_url cover_url bio job location gender birthdate created_at status')
+            .exec();
+        if (!user) {
+            throw new NotFoundException(`User with ID ${id} not found`);
+        }
+        // Ẩn tài khoản bị banned với user thường
+        return user;
+    }
+
     async findOneByEmail(email: string): Promise<UserDocument | null> {
         return this.userModel.findOne({ email }).select('+password').exec();
     }

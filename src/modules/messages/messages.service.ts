@@ -27,6 +27,14 @@ export class MessagesService {
         // Kiểm tra user có trong conversation không
         await this.requireParticipant(dto.conv_id, dto.sender_id);
 
+        // UC4.12: Kiểm tra xem người gửi có bị chặn không
+        const senderPart = await this.participantModel.findOne({
+            conv_id: dto.conv_id, user_id: dto.sender_id, left_at: null,
+        }).lean().exec();
+        if (senderPart?.blocked_by) {
+            throw new ForbiddenException('Bạn đã bị chặn bởi người dùng này, không thể gửi tin nhắn');
+        }
+
         const message = new this.messageModel({
             conv_id: dto.conv_id,
             sender_id: dto.sender_id,
@@ -139,10 +147,20 @@ export class MessagesService {
 
         const skip = (page - 1) * limit;
 
+        // Lấy participant để biết history_cleared_at của user này
+        const participantInfo = await this.participantModel.findOne({
+            conv_id: convId, user_id: userId,
+        }).lean().exec();
+
         const query: any = {
             conv_id: convId,
             is_deleted: { $ne: true },
         };
+
+        // Lọc messages sau thời điểm user xóa lịch sử
+        if (participantInfo?.history_cleared_at) {
+            query.created_at = { $gt: participantInfo.history_cleared_at };
+        }
 
         const [messages, total] = await Promise.all([
             this.messageModel
@@ -223,11 +241,15 @@ export class MessagesService {
     }
 
     // ── Xóa toàn bộ lịch sử chat (chỉ xóa phía người dùng) ────────────────
-    async deleteHistory(convId: string, userId: string): Promise<void> {
+    async deleteHistory(convId: string, userId: string): Promise<{ message: string }> {
         await this.requireParticipant(convId, userId);
-        // Trong thực tế cần bảng riêng cho deleted_for_users
-        // Ở đây đơn giản: đánh dấu last_read_at = now (ẩn tin nhắn cũ)
-        await this.conversationsService.markAsRead(convId, userId);
+        // Đánh dấu history_cleared_at = now
+        // Khi fetch messages sẽ chỉ lấy messages sau thời điểm này
+        await this.participantModel.findOneAndUpdate(
+            { conv_id: convId, user_id: userId },
+            { history_cleared_at: new Date() },
+        ).exec();
+        return { message: 'Lịch sử cuộc trò chuyện đã được xóa khỏi phía bạn' };
     }
 
     // ── Helper: lấy tin nhắn gốc khi reply ──────────────────────────────────

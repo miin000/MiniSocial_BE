@@ -1,5 +1,5 @@
 ﻿
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Query, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, UseGuards, Request, Query, HttpException, HttpStatus } from '@nestjs/common';
 import { GroupsService } from './groups.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -7,6 +7,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRoleGroup } from '../users/schemas/user.scheme';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
+import { UpdateGroupSettingsDto } from './dto/update-group-settings.dto';
 import { CreateGroupPostDto } from './dto/create-group-post.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { TransferAdminDto } from './dto/transfer-admin.dto';
@@ -79,6 +80,18 @@ export class GroupsController {
     }
   }
 
+  // UC5.8: Cập nhật cài đặt nhóm (bật/tắt duyệt bài, duyệt thành viên) – chỉ admin
+  @Patch(':id/settings')
+  @UseGuards(GroupRolesGuard)
+  @GroupRoles(GroupMemberRole.ADMIN)
+  async updateGroupSettings(@Param('id') id: string, @Request() req, @Body() settingsDto: UpdateGroupSettingsDto) {
+    try {
+      return await this.groupsService.updateGroupSettings(id, req.user.userId, settingsDto);
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to update group settings', HttpStatus.BAD_REQUEST);
+    }
+  }
+
   // UC5.1: Join group (request to join)
   @Post(':id/join')
   @Roles(UserRoleGroup.MEMBER)
@@ -102,7 +115,7 @@ export class GroupsController {
     }
   }
 
-  // UC5.8: Invite member
+  // UC5.14: Invite member to group (mod/admin)
   @Post(':id/invite')
   @UseGuards(GroupRolesGuard)
   @GroupRoles(GroupMemberRole.MODERATOR, GroupMemberRole.ADMIN)

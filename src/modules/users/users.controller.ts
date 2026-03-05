@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Patch, Post, Request, UseGuards, Body, HttpCode, HttpStatus } from '@nestjs/common';
+﻿import { Controller, Get, Patch, Post, Request, UseGuards, Body, HttpCode, HttpStatus, Param, HttpException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -46,6 +46,17 @@ export class UsersController {
   @Post('avatar')
   updateAvatar(@Request() req, @Body() body: { avatar_url: string }) {
     return this.usersService.updateAvatar(req.user.user_id, body.avatar_url);
+  }
+
+  // UC1.7: Xem profile của người dùng khác (xem bằng cách ấn vào avatar)
+  @UseGuards(AuthGuard('jwt'))
+  @Get(':id')
+  async getPublicProfile(@Param('id') id: string) {
+    try {
+      return this.usersService.getPublicProfile(id);
+    } catch (error) {
+      throw new HttpException(error.message || 'User not found', error.status || 404);
+    }
   }
 
   // 🔧 TEMPORARY: Set current user as admin (remove after first use)
