@@ -23,11 +23,8 @@ export class PostsService {
         @InjectModel('Friend') private friendModel: Model<any>,
         private readonly categoriesService: CategoriesService,
         private readonly userInteractionsService: UserInteractionsService,
-<<<<<<< HEAD
         private readonly adminService: AdminService,
-=======
         private readonly httpService: HttpService,
->>>>>>> 2b848fd35df6fc54999af63f3e5ba434d821bba4
     ) { }
 
     async create(createPostDto: CreatePostDto): Promise<Post> {
