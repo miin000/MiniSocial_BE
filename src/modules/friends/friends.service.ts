@@ -298,3 +298,4 @@ export class FriendsService {
         if (!doc) throw new NotFoundException('Request not found or not authorized');
         return { message: 'Cancelled' };
     }
+}
