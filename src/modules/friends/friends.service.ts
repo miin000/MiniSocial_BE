@@ -266,4 +266,35 @@ export class FriendsService {
         if (!doc) throw new NotFoundException('Friend relationship not found');
         return { message: 'Removed' };
     }
-}
+
+    // Get sent (outgoing) pending requests for a user
+    async getSentRequests(userId: string) {
+        const docs = await this.friendModel
+            .find({ status: 'pending', user_id_1: userId })
+            .exec();
+        const results = await Promise.all(
+            docs.map(async (d) => {
+                try {
+                    const to = await this.usersService.findById(d.user_id_2);
+                    return {
+                        requestId: d._id,
+                        toId: d.user_id_2,
+                        toName: (to as any).full_name || (to as any).username,
+                        avatar: (to as any).avatar || (to as any).avatar_url,
+                    };
+                } catch (e) {
+                    return { requestId: d._id, toId: d.user_id_2 };
+                }
+            }),
+        );
+        return results;
+    }
+
+    // Cancel a sent pending request
+    async cancelSentRequest(userId: string, requestId: string) {
+        const doc = await this.friendModel
+            .findOneAndDelete({ _id: requestId, status: 'pending', user_id_1: userId })
+            .exec();
+        if (!doc) throw new NotFoundException('Request not found or not authorized');
+        return { message: 'Cancelled' };
+    }

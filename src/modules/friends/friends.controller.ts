@@ -32,6 +32,18 @@ export class FriendsController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @Get('requests/sent')
+  async getSentRequests(@Request() req) {
+    return this.friendsService.getSentRequests(req.user.user_id);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Delete('requests/:id/cancel')
+  async cancelSentRequest(@Request() req, @Param('id') id: string) {
+    return this.friendsService.cancelSentRequest(req.user.user_id, id);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Post('requests/:id/accept')
   async accept(@Request() req, @Param('id') id: string) {
     return this.friendsService.acceptRequest(req.user.user_id, id);

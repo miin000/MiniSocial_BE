@@ -194,6 +194,9 @@ export class GroupsService {
             members: validMembers,
             userRole: membership?.role ?? null,
             isMember: !!membership,
+            isPendingJoin: !membership ? !!(await this.groupMemberModel
+                .findOne({ group_id: groupId, user_id: userId, status: GroupMemberStatus.PENDING })
+                .exec()) : false,
         };
     }
 
