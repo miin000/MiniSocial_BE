@@ -36,4 +36,30 @@ export class UploadController {
       throw new BadRequestException('Upload failed');
     }
   }
+
+  @Post('avatar')
+  @UseGuards(AuthGuard('jwt'))
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Request() req) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    if (!file.mimetype.startsWith('image/')) {
+      throw new BadRequestException('Only image files are allowed');
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size too large. Maximum 5MB allowed');
+    }
+
+    try {
+      const url = await this.uploadService.uploadImage(file, 'minisocial/avatars');
+      return { url };
+    } catch (error) {
+      this.logger.error('Avatar upload failed', error);
+      throw new BadRequestException('Upload failed');
+    }
+  }
 }

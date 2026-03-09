@@ -26,6 +26,12 @@ export class FriendsController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @Get('check/:userId')
+  async checkFriendship(@Request() req, @Param('userId') userId: string) {
+    return this.friendsService.checkFriendship(req.user.user_id, userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Post('requests')
   async sendRequest(@Request() req, @Body() body: { to: string }) {
     return this.friendsService.sendRequest(req.user.user_id, body.to);

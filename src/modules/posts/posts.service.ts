@@ -183,11 +183,13 @@ export class PostsService {
     async findByUserId(userId: string, page: number = 1, limit: number = 20, currentUserId?: string): Promise<{ posts: any[], total: number }> {
         const skip = (page - 1) * limit;
         
-        // Build visibility-aware query for profile posts
+        // Build visibility-aware query for profile posts (include group posts that are approved)
         const query: any = {
             user_id: userId,
-            group_id: { $in: [null, undefined, ''] },
-            status: PostStatus.ACTIVE,
+            $or: [
+                { group_id: { $in: [null, undefined, ''] }, status: PostStatus.ACTIVE },
+                { group_id: { $nin: [null, undefined, ''] }, status: { $in: [PostStatus.ACTIVE, PostStatus.APPROVED] } },
+            ],
         };
 
         if (currentUserId && currentUserId !== userId) {
@@ -368,7 +370,7 @@ export class PostsService {
     private async enrichPostsWithUserInfo(posts: any[], currentUserId?: string): Promise<any[]> {
         if (!posts || posts.length === 0) return [];
 
-        const userIds = [...new Set(posts.map(post => post.user_id))];
+        const userIds = [...new Set(posts.map(post => post.user_id?.toString()))];
         
         const users = await this.userModel
             .find({ _id: { $in: userIds } })
@@ -391,7 +393,7 @@ export class PostsService {
         }
 
         return posts.map(post => {
-            const user = userMap.get(post.user_id);
+            const user = userMap.get(post.user_id?.toString());
             return {
                 ...post,
                 user_name: (user as any)?.full_name || (user as any)?.username || 'Unknown User',

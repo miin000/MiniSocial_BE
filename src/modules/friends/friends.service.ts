@@ -92,6 +92,32 @@ export class FriendsService {
         return results;
     }
 
+    // Check friendship status between two users
+    async checkFriendship(currentUserId: string, otherUserId: string) {
+        const doc = await this.friendModel
+            .findOne({
+                $or: [
+                    { user_id_1: currentUserId, user_id_2: otherUserId },
+                    { user_id_1: otherUserId, user_id_2: currentUserId },
+                ],
+            })
+            .exec();
+
+        if (!doc) return { status: 'none' };
+
+        if (doc.status === 'accepted') return { status: 'friends', friendId: doc._id };
+
+        if (doc.status === 'pending') {
+            const isSender = doc.user_id_1 === currentUserId;
+            return {
+                status: isSender ? 'request_sent' : 'request_received',
+                requestId: doc._id,
+            };
+        }
+
+        return { status: 'none' };
+    }
+
     // Return simple suggestions (users that are not friends and not the same user)
     async getSuggestions(userId: string, limit = 50) {
         // Build adjacency map of accepted friendships so we can compute mutual counts.

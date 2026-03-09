@@ -456,6 +456,24 @@ export class AdminService {
 
         await report.save();
 
+        // Also resolve other pending reports for the same post
+        if (report.reported_post_id) {
+            await this.reportModel.updateMany(
+                {
+                    reported_post_id: report.reported_post_id,
+                    _id: { $ne: report._id },
+                    status: ReportStatus.PENDING,
+                },
+                {
+                    status: ReportStatus.RESOLVED,
+                    resolved_at: new Date(),
+                    resolved_by: resolvedBy,
+                    resolved_note: `Auto-resolved: same post handled via report ${id}`,
+                    action_taken: body.action_taken || 'none',
+                },
+            );
+        }
+
         // Ghi log
         await this.writeSystemLog(resolvedBy, 'resolve_report', 'report', id, {
             action_taken: body.action_taken,

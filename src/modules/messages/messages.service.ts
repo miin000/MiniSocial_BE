@@ -109,6 +109,9 @@ export class MessagesService {
             dto.conv_id, saved._id.toString(), displayContent, dto.sender_id,
         );
 
+        // Increment shares_count on the post
+        await this.postModel.findByIdAndUpdate(dto.post_id, { $inc: { shares_count: 1 } }).exec();
+
         // Ghi interaction share cho hệ thống khuyến nghị
         await this.userInteractionsService.record({
             user_id: dto.sender_id,
