@@ -4,12 +4,6 @@ import { HydratedDocument } from 'mongoose';
 
 export type UserDocument = HydratedDocument<User>;
 
-export enum UserRoleGroup {
-  MEMBER = 'MEMBER',
-  MODERATOR = 'MODERATOR',
-  ADMIN = 'ADMIN',
-}
-
 export enum UserRoleAdmin {
   ADMIN = 'ADMIN',
   MODERATOR = 'MODERATOR',
@@ -61,9 +55,6 @@ export class User {
 
   @Prop()
   birthdate: Date;
-
-  @Prop({ type: [String], enum: UserRoleGroup, default: [UserRoleGroup.MEMBER] })
-  roles_group: UserRoleGroup[];
 
   @Prop({ type: [String], enum: UserRoleAdmin, default: [UserRoleAdmin.NONE] })
   roles_admin: UserRoleAdmin[];

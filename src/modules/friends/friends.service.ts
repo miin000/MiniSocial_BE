@@ -108,7 +108,9 @@ export class FriendsService {
         if (doc.status === 'accepted') return { status: 'friends', friendId: doc._id };
 
         if (doc.status === 'pending') {
-            const isSender = doc.user_id_1 === currentUserId;
+            // Use action_user_id (the sender) for reliable determination
+            const senderId = (doc.action_user_id || doc.user_id_1)?.toString();
+            const isSender = senderId === currentUserId?.toString();
             return {
                 status: isSender ? 'request_sent' : 'request_received',
                 requestId: doc._id,

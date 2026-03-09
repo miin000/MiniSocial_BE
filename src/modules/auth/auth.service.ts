@@ -66,12 +66,17 @@ export class AuthService {
       throw new UnauthorizedException('Mật khẩu không đúng');
     }
 
-    // 4) Tạo JWT (nên dùng key thống nhất)
+    // 4) Kiểm tra tài khoản bị khóa
+    if (user.status === 'BLOCKED') {
+      this.logger.warn(`Login failed: user is blocked identifier="${normalized}"`);
+      throw new UnauthorizedException('Tài khoản của bạn đã bị khóa do vi phạm chính sách cộng đồng.');
+    }
+
+    // 5) Tạo JWT (nên dùng key thống nhất)
     const payload = {
       sub: String(user._id),
       email: user.email,
       roles_admin: user.roles_admin,
-      roles_group: user.roles_group,
     };
 
     const accessToken = await this.jwtService.signAsync(payload);
@@ -86,7 +91,6 @@ export class AuthService {
         email: user.email,
         fullName: user.full_name,
         roles_admin: user.roles_admin,
-        roles_group: user.roles_group,
       },
     };
   }

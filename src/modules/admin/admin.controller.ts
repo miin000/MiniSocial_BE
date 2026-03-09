@@ -33,7 +33,7 @@ export class AdminController {
   ) {}
 
   // User management endpoints
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('users')
   async getAllUsers() {
     return this.adminService.getAllUsers();
@@ -46,14 +46,14 @@ export class AdminController {
     return this.adminService.deleteUser(id, req.user.userId);
   }
 
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Put('users/:id/block')
   @HttpCode(HttpStatus.OK)
   async blockUser(@Param('id') id: string, @Request() req) {
     return this.adminService.blockUser(id, req.user.userId);
   }
 
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Put('users/:id/unblock')
   @HttpCode(HttpStatus.OK)
   async unblockUser(@Param('id') id: string, @Request() req) {
@@ -62,7 +62,7 @@ export class AdminController {
 
   // ============ Post Management ============
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('posts')
   async getAllPosts(
     @Query('page') page: string = '1',
@@ -73,7 +73,7 @@ export class AdminController {
     return this.adminService.getAllPosts(parseInt(page), parseInt(limit), status, search);
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('posts/:id')
   async getPostById(@Param('id') id: string) {
     return this.adminService.getPostById(id);
@@ -100,7 +100,7 @@ export class AdminController {
 
   // ============ Report Management ============
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('reports')
   async getAllReports(
     @Query('page') page: string = '1',
@@ -110,13 +110,13 @@ export class AdminController {
     return this.adminService.getAllReports(parseInt(page), parseInt(limit), status);
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('reports/stats')
   async getReportStats() {
     return this.adminService.getReportStats();
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('reports/:id')
   async getReportById(@Param('id') id: string) {
     return this.adminService.getReportById(id);
@@ -143,19 +143,19 @@ export class AdminController {
   }
 
   // Group management endpoints
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('groups')
   async getAllGroups() {
     return this.adminService.getAllGroups();
   }
 
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('groups/:id/details')
   async getGroupDetails(@Param('id') id: string) {
     return this.adminService.getGroupDetails(id);
   }
 
-  @Roles(UserRoleAdmin.ADMIN)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
   @Put('groups/:id/status')
   async toggleGroupStatus(@Param('id') id: string, @Body() body: { status: 'active' | 'blocked' }, @Request() req) {
     return this.adminService.toggleGroupStatus(id, body.status, req.user.userId);
@@ -240,13 +240,13 @@ export class AdminController {
 
   // ============ User Activity Logs ============
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('user-activity')
   async getUserActivityLogs(@Query() dto: QueryUserActivityLogsDto) {
     return this.adminService.getUserActivityLogs(dto);
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('user-activity/summary')
   async getUserActivitySummary(
     @Query('user_id') userId?: string,
@@ -256,7 +256,7 @@ export class AdminController {
     return this.adminService.getUserActivitySummary(userId, from, to);
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('user-activity/export')
   async exportUserActivityLogs(@Query() dto: QueryUserActivityLogsDto) {
     return this.adminService.exportUserActivityLogs(dto);
@@ -264,13 +264,13 @@ export class AdminController {
 
   // ============ System Settings ============
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('settings')
   async getAllSettings() {
     return this.adminService.getAllSettings();
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('settings/:key')
   async getSettingByKey(@Param('key') key: string) {
     return this.adminService.getSettingByKey(key);
@@ -304,31 +304,31 @@ export class AdminController {
 
   // ============ Analytics & Statistics ============
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('analytics/overview')
   async getAnalyticsOverview(@Query('from') from?: string, @Query('to') to?: string) {
     return this.analyticsService.getOverview(from, to);
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('analytics/growth')
   async getGrowthChart(@Query() dto: QueryAnalyticsDto) {
     return this.analyticsService.getGrowthChart(dto);
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('analytics/engagement')
   async getEngagementStats(@Query('from') from?: string, @Query('to') to?: string) {
     return this.analyticsService.getEngagementStats(from, to);
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('analytics/daily')
   async getDailyStats(@Query() dto: QueryDailyStatsDto) {
     return this.analyticsService.getDailyStats(dto);
   }
 
-  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR)
+  @Roles(UserRoleAdmin.ADMIN, UserRoleAdmin.MODERATOR, UserRoleAdmin.VIEWER)
   @Get('analytics/monthly')
   async getMonthlyStats(@Query() dto: QueryMonthlyStatsDto) {
     return this.analyticsService.getMonthlyStats(dto);

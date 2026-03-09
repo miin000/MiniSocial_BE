@@ -56,16 +56,58 @@ export class AdminService {
     }
 
     // Group management methods for admin
-    async getAllGroups(): Promise<Group[]> {
-        return this.groupModel.find();
+    async getAllGroups(): Promise<any[]> {
+        const groups = await this.groupModel.find().lean();
+        
+        // Enrich each group with owner info and actual member count
+        const enriched = await Promise.all(groups.map(async (group) => {
+            // Get creator info
+            let owner: any = null;
+            if (group.creator_id) {
+                owner = await this.userModel.findById(group.creator_id)
+                    .select('username full_name avatar_url').lean();
+            }
+            
+            // Count actual members
+            const memberCount = await this.groupMemberModel.countDocuments({ 
+                group_id: group._id.toString(),
+                status: 'ACTIVE',
+            });
+            
+            return {
+                ...group,
+                owner,
+                memberCount,
+            };
+        }));
+        
+        return enriched;
     }
 
     async getGroupDetails(groupId: string): Promise<any> {
-        const group = await this.groupModel.findById(groupId);
-        const members = await this.groupMemberModel.find({ group_id: groupId });
+        const group = await this.groupModel.findById(groupId).lean();
+        const members = await this.groupMemberModel.find({ group_id: groupId }).lean();
+        
+        // Enrich members with user info
+        const enrichedMembers = await Promise.all(members.map(async (member) => {
+            let user: any = null;
+            if (member.user_id) {
+                user = await this.userModel.findById(member.user_id)
+                    .select('username full_name avatar_url email').lean();
+            }
+            return { ...member, user };
+        }));
+        
+        // Get owner info
+        let owner: any = null;
+        if (group?.creator_id) {
+            owner = await this.userModel.findById(group.creator_id)
+                .select('username full_name avatar_url').lean();
+        }
+        
         const posts = await this.postModel.find({ group_id: groupId });
 
-        return { group, members, posts };
+        return { group: { ...group, owner }, members: enrichedMembers, posts };
     }
 
     async toggleGroupStatus(groupId: string, status: 'active' | 'blocked', adminId?: string): Promise<Group> {

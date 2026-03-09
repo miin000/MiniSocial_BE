@@ -3,8 +3,6 @@ import { Controller, Get, Post, Put, Patch, Delete, Body, Param, UseGuards, Requ
 import { GroupsService } from './groups.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { UserRoleGroup } from '../users/schemas/user.scheme';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { UpdateGroupSettingsDto } from './dto/update-group-settings.dto';
@@ -24,7 +22,6 @@ export class GroupsController {
 
   // UC5.3: Create group
   @Post()
-  @Roles(UserRoleGroup.MEMBER)
   async createGroup(@Request() req, @Body() createGroupDto: CreateGroupDto) {
     try {
       return await this.groupsService.createGroup(req.user.userId, createGroupDto);
@@ -35,7 +32,6 @@ export class GroupsController {
 
   // Get all groups (for users) - My groups and suggested
   @Get()
-  @Roles(UserRoleGroup.MEMBER)
   async findAll(@Request() req) {
     try {
       return await this.groupsService.getGroupsForUser(req.user.userId);
@@ -46,7 +42,6 @@ export class GroupsController {
 
   // Get group by id
   @Get(':id')
-  @Roles(UserRoleGroup.MEMBER)
   async findOne(@Param('id') id: string, @Request() req) {
     try {
       return await this.groupsService.getGroupDetail(id, req.user.userId);
@@ -94,7 +89,6 @@ export class GroupsController {
 
   // UC5.1: Join group (request to join)
   @Post(':id/join')
-  @Roles(UserRoleGroup.MEMBER)
   async joinGroup(@Param('id') id: string, @Request() req) {
     try {
       return await this.groupsService.joinGroup(id, req.user.userId);
@@ -105,7 +99,6 @@ export class GroupsController {
 
   // UC5.2: Leave group
   @Post(':id/leave')
-  @Roles(UserRoleGroup.MEMBER)
   async leaveGroup(@Param('id') id: string, @Request() req) {
     try {
       await this.groupsService.leaveGroup(id, req.user.userId);
