@@ -1,98 +1,163 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+---
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+# MiniSocial Backend
 
-## Description
+Backend service cho hệ thống mạng xã hội **MiniSocial** – cung cấp API cho các chức năng như quản lý người dùng, bài viết, tương tác, và hệ thống đề xuất nội dung.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Giới thiệu
 
-## Project setup
+MiniSocial là một hệ thống mạng xã hội thu nhỏ, được xây dựng nhằm mô phỏng các tính năng cốt lõi của một nền tảng social media hiện đại:
 
-```bash
-$ npm install
+* Đăng bài viết, tương tác (like, comment)
+* Theo dõi người dùng (follow)
+* Feed cá nhân hóa
+* Hệ thống gợi ý nội dung (Recommendation System)
+
+Backend đóng vai trò xử lý logic nghiệp vụ, xác thực người dùng và cung cấp RESTful API cho frontend (Web/Mobile).
+
+---
+
+## 🛠️ Công nghệ sử dụng
+
+* **Framework:** NestJS
+* **Ngôn ngữ:** TypeScript
+* **Database:** MongoDB (Mongoose)
+* **Authentication:** JWT (JSON Web Token)
+* **Cache (tuỳ chọn):** Redis
+* **Message Queue (tuỳ chọn):** Kafka / RabbitMQ
+
+---
+
+## 📂 Cấu trúc thư mục
+
+```
+src/
+│── modules/
+│   ├── auth/              # Xác thực & phân quyền
+│   ├── users/             # Quản lý người dùng
+│   ├── posts/             # Bài viết
+│   ├── comments/          # Bình luận
+│   ├── likes/             # Like/Reaction
+│   ├── follows/           # Theo dõi
+│   └── recommendation/    # Hệ thống đề xuất
+│
+│── common/                # Utils, guards, filters
+│── config/                # Cấu hình hệ thống
+│── database/              # Kết nối DB
+│── main.ts                # Entry point
 ```
 
-## Compile and run the project
+---
+
+## 🔑 Tính năng chính
+
+### 👤 Người dùng
+
+* Đăng ký / Đăng nhập
+* Cập nhật thông tin cá nhân
+* Upload avatar, cover
+
+### 📝 Bài viết
+
+* Tạo / sửa / xoá bài viết
+* Feed bài viết theo thời gian / đề xuất
+* Hỗ trợ media (ảnh, video)
+
+### ❤️ Tương tác
+
+* Like / Unlike bài viết
+* Comment bài viết
+* Thông báo (notification - nếu có)
+
+### 👥 Kết nối
+
+* Follow / Unfollow người dùng
+* Xem danh sách follower / following
+
+### 🤖 Recommendation System
+
+* Gợi ý bài viết dựa trên:
+
+  * Hành vi người dùng (like, comment)
+  * Quan hệ follow
+  * Độ phổ biến bài viết
+
+---
+
+## ⚙️ Cài đặt & chạy dự án
+
+### 1. Clone repo
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+git clone https://github.com/miin000/MiniSocial_BE.git
+cd MiniSocial_BE
 ```
 
-## Run tests
+### 2. Cài dependencies
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm install
 ```
 
-## Deployment
+### 3. Cấu hình môi trường
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Tạo file `.env`:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+```env
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017/minisocial
+JWT_SECRET=your_secret_key
+```
+
+### 4. Chạy server
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run start:dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## 📡 API Endpoint (ví dụ)
 
-Check out a few resources that may come in handy when working with NestJS:
+| Method | Endpoint        | Mô tả              |
+| ------ | --------------- | ------------------ |
+| POST   | /auth/register  | Đăng ký            |
+| POST   | /auth/login     | Đăng nhập          |
+| GET    | /users/:id      | Lấy thông tin user |
+| POST   | /posts          | Tạo bài viết       |
+| GET    | /posts/feed     | Lấy feed           |
+| POST   | /posts/:id/like | Like bài viết      |
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+---
 
-## Support
+## Phân quyền
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Hệ thống hỗ trợ 3 vai trò:
 
-## Stay in touch
+* **ADMIN:** Toàn quyền hệ thống
+* **MODERATOR:** Quản lý nội dung
+* **VIEWER / USER:** Người dùng bình thường
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
 
-## License
+## Định hướng phát triển
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+* Tối ưu thuật toán recommendation
+* Realtime notification (WebSocket)
+* Microservices architecture
+* Triển khai CI/CD
+
+---
+
+## Liên kết liên quan
+
+* Frontend Web: [https://github.com/miin000/MiniSocial_nextjs](https://github.com/miin000/MiniSocial_nextjs)
+* Mobile App: [https://github.com/miin000/MiniSocial_flutter](https://github.com/miin000/MiniSocial_flutter)
+* Recommendation System: [https://github.com/miin000/MiniSocial_Recomendation_System](https://github.com/miin000/MiniSocial_Recomendation_System)
+
+---
+
+## Tác giả
+
+* Phạm Quang Minh
