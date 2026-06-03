@@ -1,6 +1,15 @@
-﻿import { Controller, Post, UseInterceptors, UploadedFile, UseGuards, Request, BadRequestException, Logger } from '@nestjs/common';
+﻿import {
+  Controller,
+  Post,
+  UseInterceptors,
+  UploadedFile,
+  UseGuards,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
+import { memoryStorage } from 'multer';
 import { UploadService } from './upload.service';
 
 @Controller('upload')
@@ -9,53 +18,34 @@ export class UploadController {
 
   constructor(private readonly uploadService: UploadService) {}
 
-  @Post('image')
-  @UseGuards(AuthGuard('jwt'))
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadImage(@UploadedFile() file: Express.Multer.File, @Request() req) {
-    if (!file) {
-      throw new BadRequestException('No file uploaded');
-    }
-
-    // Validate file type
-    if (!file.mimetype.startsWith('image/')) {
-      throw new BadRequestException('Only image files are allowed');
-    }
-
-    // Validate file size (5MB max)
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      throw new BadRequestException('File size too large. Maximum 5MB allowed');
-    }
-
-    try {
-      const url = await this.uploadService.uploadImage(file, 'minisocial/avatars');
-      return { url };
-    } catch (error) {
-      this.logger.error('Upload failed', error);
-      throw new BadRequestException('Upload failed');
-    }
-  }
-
   @Post('avatar')
   @UseGuards(AuthGuard('jwt'))
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Request() req) {
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          return cb(new BadRequestException('Only image files are allowed'), false);
+        }
+
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadAvatar(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
 
-    if (!file.mimetype.startsWith('image/')) {
-      throw new BadRequestException('Only image files are allowed');
-    }
-
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      throw new BadRequestException('File size too large. Maximum 5MB allowed');
-    }
-
     try {
-      const url = await this.uploadService.uploadImage(file, 'minisocial/avatars');
+      const url = await this.uploadService.uploadImage(
+        file,
+        'minisocial/avatars',
+      );
+
       return { url };
     } catch (error) {
       this.logger.error('Avatar upload failed', error);
