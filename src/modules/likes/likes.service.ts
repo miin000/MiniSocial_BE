@@ -21,7 +21,7 @@ export class LikesService {
         private readonly adminService: AdminService,
     ) { }
 
-    async toggleLike(createLikeDto: CreateLikeDto): Promise<{ liked: boolean, like?: Like }> {
+    async toggleLike(createLikeDto: CreateLikeDto): Promise<{ liked: boolean, like?: Like, target?: 'post' | 'comment' }> {
         const query: any = { user_id: createLikeDto.user_id };
         if (createLikeDto.post_id) {
             query.post_id = createLikeDto.post_id;
@@ -35,11 +35,21 @@ export class LikesService {
         if (existingLike) {
             // Unlike
             await this.likeModel.findByIdAndDelete(existingLike._id).exec();
-            return { liked: false };
+            await this.incrementTargetLikesCount(createLikeDto, -1);
+            return { liked: false, target: createLikeDto.post_id ? 'post' : 'comment' };
         } else {
             // Like
             const newLike = new this.likeModel(createLikeDto);
-            const savedLike = await newLike.save();
+            let savedLike: Like;
+            try {
+                savedLike = await newLike.save();
+            } catch (error) {
+                if ((error as { code?: number })?.code === 11000) {
+                    return { liked: true, target: createLikeDto.post_id ? 'post' : 'comment' };
+                }
+                throw error;
+            }
+            await this.incrementTargetLikesCount(createLikeDto, 1);
 
             // Ghi interaction cho hệ thống khuyến nghị (chỉ ghi khi like bài viết)
             if (createLikeDto.post_id) {
@@ -56,7 +66,17 @@ export class LikesService {
             // Ghi user activity log
             this.adminService.writeUserActivity(createLikeDto.user_id, ActivityType.LIKE).catch(() => {});
 
-            return { liked: true, like: savedLike };
+            return { liked: true, like: savedLike, target: createLikeDto.post_id ? 'post' : 'comment' };
+        }
+    }
+
+    private async incrementTargetLikesCount(dto: CreateLikeDto, increment: 1 | -1): Promise<void> {
+        if (dto.post_id) {
+            const filter = increment < 0 ? { _id: dto.post_id, likes_count: { $gt: 0 } } : { _id: dto.post_id };
+            await this.postModel.updateOne(filter, { $inc: { likes_count: increment } }).exec();
+        } else if (dto.comment_id) {
+            const filter = increment < 0 ? { _id: dto.comment_id, likes_count: { $gt: 0 } } : { _id: dto.comment_id };
+            await this.commentModel.updateOne(filter, { $inc: { likes_count: increment } }).exec();
         }
     }
 

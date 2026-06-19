@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PostsService } from '../../modules/posts/posts.service';
 import { PostStatus, PostVisibility } from '../../modules/posts/schemas/post.scheme';
 import { ActivityType } from '../../modules/admin/schemas/user-activity-log.schema';
@@ -145,6 +145,12 @@ describe('PostsService', () => {
     expect(result).toMatchObject({ _id: 'post-1', is_edited: true });
   });
 
+  it('rejects updating another user post when current user is provided', async () => {
+    const service = createService();
+
+    await expect(service.update('post-1', 'user-2', { content: 'Hacked' } as any)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   it('soft-deletes a post by changing its status', async () => {
     const service = createService();
 
@@ -154,7 +160,21 @@ describe('PostsService', () => {
     expect(result).toMatchObject({ _id: 'post-1' });
   });
 
-  it('records a bug: empty text-only post is still accepted today', async () => {
+  it('allows media-only post creation', async () => {
+    categoriesService.getValidSlugs.mockResolvedValue(['tech']);
+    const service = createService();
+
+    const result = await service.create({
+      user_id: 'user-1',
+      content: '',
+      media_urls: ['https://example.com/image.https://res.cloudinary.com/dcfuybexm/image/upload/v1781544754/minisocial/posts/r0szt1n8bnw09dj5zyjt.gif'],
+      tags: ['tech'],
+    } as any);
+
+    expect(result).toMatchObject({ _id: 'post-1' });
+  });
+
+  it('rejects empty text-only post creation', async () => {
     categoriesService.getValidSlugs.mockResolvedValue(['tech']);
     const service = createService();
 

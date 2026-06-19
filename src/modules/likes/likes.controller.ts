@@ -16,18 +16,7 @@ export class LikesController {
   async toggleLike(@Body() createLikeDto: CreateLikeDto) {
     const result = await this.likesService.toggleLike(createLikeDto);
     
-    // Update likes count
-    if (createLikeDto.post_id) {
-      await this.postsService.incrementLikesCount(
-        createLikeDto.post_id,
-        result.liked ? 1 : -1
-      );
-    } else if (createLikeDto.comment_id) {
-      await this.commentsService.incrementLikesCount(
-        createLikeDto.comment_id,
-        result.liked ? 1 : -1
-      );
-    }
+    // LikesService updates counts atomically with the like/unlike operation.
     
     return result;
   }

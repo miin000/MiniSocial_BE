@@ -1,4 +1,5 @@
-﻿import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Headers } from '@nestjs/common';
+﻿import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Headers, Request } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { PostsService } from './posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -43,13 +44,15 @@ export class PostsController {
     return this.postsService.findOne(id, userId);
   }
 
+  @UseGuards(AuthGuard('jwt'))
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePostDto: UpdatePostDto) {
-    return this.postsService.update(id, updatePostDto);
+  update(@Param('id') id: string, @Request() req, @Body() updatePostDto: UpdatePostDto) {
+    return this.postsService.update(id, req.user.userId || req.user.user_id, updatePostDto);
   }
 
+  @UseGuards(AuthGuard('jwt'))
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.postsService.delete(id);
+  delete(@Param('id') id: string, @Request() req) {
+    return this.postsService.delete(id, req.user.userId || req.user.user_id);
   }
 }

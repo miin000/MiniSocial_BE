@@ -1,4 +1,4 @@
-﻿import { Injectable, NotFoundException } from '@nestjs/common';
+﻿import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Comment } from './schemas/comment.scheme';
@@ -22,8 +22,17 @@ export class CommentsService {
     ) { }
 
     async create(createCommentDto: CreateCommentDto): Promise<Comment> {
+        const content = createCommentDto.content?.trim();
+        if (!content) {
+            throw new BadRequestException('Comment cannot be empty');
+        }
+        if (content.length > 1000) {
+            throw new BadRequestException('Comment must not exceed 1000 characters');
+        }
+
         const createdComment = new this.commentModel({
             ...createCommentDto,
+            content,
             likes_count: 0,
         });
         const saved = await createdComment.save();

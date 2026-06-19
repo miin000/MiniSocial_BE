@@ -38,6 +38,19 @@ export class MessagesService {
             throw new ForbiddenException('Bạn đã bị chặn bởi người dùng này, không thể gửi tin nhắn');
         }
 
+        const content = dto.content?.trim();
+        const hasText = !!content;
+        const hasMedia = Array.isArray(dto.media_urls) && dto.media_urls.length > 0;
+        const hasFile = !!dto.file_url?.trim();
+
+        if (!hasText && !hasMedia && !hasFile) {
+            throw new BadRequestException('Message must contain text, media, or file');
+        }
+
+        if ((dto.message_type ?? MessageType.TEXT) === MessageType.TEXT && !hasText && !hasMedia && !hasFile) {
+            throw new BadRequestException('Text message cannot be empty');
+        }
+
         const message = new this.messageModel({
             conv_id: dto.conv_id,
             sender_id: dto.sender_id,
@@ -154,7 +167,7 @@ export class MessagesService {
         try {
             await this.conversationsService.syncConversationsToFirestore([convId]);
         } catch (err) {
-            console.error('[MessagesService] Firestore sync failed for', convId, err?.message);
+            console.error('[MessagesService] Firestore sync failed for', convId, (err as Error)?.message);
         }
 
         const skip = (page - 1) * limit;
@@ -201,14 +214,19 @@ export class MessagesService {
         if (msg.is_recalled) throw new BadRequestException('Tin nhắn đã bị thu hồi');
         if (msg.message_type !== MessageType.TEXT) throw new BadRequestException('Chỉ có thể sửa tin nhắn văn bản');
 
-        msg.content = dto.content;
+        const content = dto.content?.trim();
+        if (!content) {
+            throw new BadRequestException('Text message cannot be empty');
+        }
+
+        msg.content = content;
         msg.is_edited = true;
         msg.edited_at = new Date();
         const saved = await msg.save();
 
         // Cập nhật Firestore
         this.firebaseService.updateFirestoreMessage(msg.conv_id, saved._id.toString(), {
-            content: dto.content,
+            content,
             is_edited: true,
             edited_at: msg.edited_at,
         }).catch(() => {});

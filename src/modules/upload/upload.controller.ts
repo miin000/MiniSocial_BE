@@ -27,8 +27,9 @@ export class UploadController {
         fileSize: 5 * 1024 * 1024,
       },
       fileFilter: (_req, file, cb) => {
-        if (!file.mimetype.startsWith('image/')) {
-          return cb(new BadRequestException('Only image files are allowed'), false);
+        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedMimeTypes.includes(file.mimetype)) {
+          return cb(new BadRequestException('Only jpg, png, webp files are allowed'), false);
         }
 
         cb(null, true);

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { BadRequestException } from '@nestjs/common';
 import { CommentsService } from '../../modules/comments/comments.service';
 import { createQueryChain, createSaveModel } from '../helpers/mongoose-chain';
 
@@ -88,6 +89,26 @@ describe('CommentsService', () => {
     expect(firebaseService.writeNotification).toHaveBeenCalledWith(
       expect.objectContaining({ user_id: 'post-owner', type: 'comment', ref_type: 'post' }),
     );
+  });
+
+  it('rejects an empty comment', async () => {
+    const service = createService();
+
+    await expect(service.create({
+      user_id: 'user-1',
+      post_id: 'post-1',
+      content: '   ',
+    } as any)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects a comment longer than 1000 characters', async () => {
+    const service = createService();
+
+    await expect(service.create({
+      user_id: 'user-1',
+      post_id: 'post-1',
+      content: 'a'.repeat(1001),
+    } as any)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('loads comments for a post with user enrichment', async () => {

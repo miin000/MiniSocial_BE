@@ -41,6 +41,14 @@ export class PostsService {
             throw new BadRequestException(`Invalid tags: ${invalidTags.join(', ')}`);
         }
 
+        const content = createPostDto.content?.trim();
+        const hasText = !!content;
+        const hasMedia = Array.isArray(createPostDto.media_urls) && createPostDto.media_urls.length > 0;
+
+        if (!hasText && !hasMedia) {
+            throw new BadRequestException('Post must contain text or media');
+        }
+
         const isGroupPost = !!createPostDto.group_id;
         const createdPost = new this.postModel({
             ...createPostDto,
@@ -307,10 +315,24 @@ export class PostsService {
         return post;
     }
 
-    async update(id: string, updatePostDto: UpdatePostDto): Promise<Post> {
+    async update(id: string, currentUserIdOrDto: string | UpdatePostDto, updatePostDto?: UpdatePostDto): Promise<Post> {
+        const hasCurrentUser = typeof currentUserIdOrDto === 'string';
+        const currentUserId = hasCurrentUser ? currentUserIdOrDto : undefined;
+        const dto = hasCurrentUser ? updatePostDto : currentUserIdOrDto;
+
+        if (currentUserId) {
+            const post = await this.postModel.findById(id).exec();
+            if (!post) {
+                throw new NotFoundException(`Post with ID ${id} not found`);
+            }
+            if (post.user_id?.toString() !== currentUserId) {
+                throw new ForbiddenException('You are not allowed to update this post');
+            }
+        }
+
         // is_edited = true khi user chỉnh sửa nội dung bài viết
         const updatedPost = await this.postModel
-            .findByIdAndUpdate(id, { ...updatePostDto, is_edited: true }, { new: true })
+            .findByIdAndUpdate(id, { ...dto, is_edited: true }, { new: true })
             .exec();
         if (!updatedPost) {
             throw new NotFoundException(`Post with ID ${id} not found`);
@@ -318,7 +340,17 @@ export class PostsService {
         return updatedPost;
     }
 
-    async delete(id: string): Promise<Post> {
+    async delete(id: string, currentUserId?: string): Promise<Post> {
+        if (currentUserId) {
+            const post = await this.postModel.findById(id).exec();
+            if (!post) {
+                throw new NotFoundException(`Post with ID ${id} not found`);
+            }
+            if (post.user_id?.toString() !== currentUserId) {
+                throw new ForbiddenException('You are not allowed to delete this post');
+            }
+        }
+
         const deletedPost = await this.postModel
             .findByIdAndUpdate(id, { status: 'deleted' }, { new: true })
             .exec();
